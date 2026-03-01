@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('Stylesheet'); ?>
+  </head>
+  <body>
+
+    <h2>🎤 LRCタイミング付与ツール</h2>
+
+    <div id="setup-area">
+      
+      <div id="drop-area">
+        <p>🎵 MP3ファイルをここにドラッグ＆ドロップ</p>
+        <p>または</p>
+        <input type="file" id="audio-file" accept="audio/mp3">
+      </div>
+      
+      <p id="file-status">ファイルが選択されていません</p>
+
+      <input type="text" id="input-title" placeholder="曲のタイトル (ti:ヘッダー)">
+      <input type="text" id="input-artist" placeholder="アーティスト名 (ar:ヘッダー)">
+      
+      <div class="char-controls">
+        <p>音符・特殊文字の挿入 (歌詞入力欄用):</p>
+        <button onclick="insertCharacter('♪')">♪</button>
+        <button onclick="insertCharacter('♫')">♫</button>
+        <button onclick="insertCharacter('★')">★</button>
+        <button onclick="insertCharacter('—')">—</button>
+      </div>
+      <textarea id="input-lyrics" placeholder="ここに歌詞をペーストしてください（一行ずつ）"></textarea>
+      
+      <div class="controls setup-controls">
+          <button onclick="startSetup()">設定完了 / スタート</button>
+          <button onclick="downloadTXT()" id="download-txt-setup-btn">TXTダウンロード</button>
+      </div>
+    </div>
+
+    <div id="timing-area" class="hidden">
+      <audio id="audio-player" controls></audio>
+      
+      <p id="progress-status"></p>
+      
+      <div id="lyrics-display">
+        <p id="current-line" class="current-line-style">タップして開始</p>
+        <div id="next-lines"></div>
+      </div>
+
+      <div id="tap-control" ontouchstart="recordTime(event)" onmousedown="recordTime(event)">
+        <p>TAP TO SYNC</p>
+      </div>
+      
+      <div id="lrc-output-area" class="hidden">
+          <h3>生成されたLRCテキスト</h3>
+          <textarea id="output-lrc-text" readonly></textarea>
+          
+          <div class="controls output-controls">
+            <button onclick="copyLRC()">LRCテキストをコピー</button> 
+            <button onclick="downloadLRCFile()">LRCファイルをダウンロード</button>
+          </div>
+      </div>
+
+
+      <div class="controls timing-controls-bottom">
+        <button onclick="undoTiming()" class="undo-button">↩ ひとつ戻る</button> 
+        <button onclick="resetTiming()">リセット</button>
+        <button onclick="downloadTXT()">TXTダウンロード</button>
+      </div>
+    </div>
+
+    <script>
+      const audioPlayer = document.getElementById('audio-player');
+      const inputLyrics = document.getElementById('input-lyrics');
+      const currentLineDisplay = document.getElementById('current-line');
+      const nextLinesDisplay = document.getElementById('next-lines');
+      const tapControl = document.getElementById('tap-control');
+      const dropArea = document.getElementById('drop-area');
+      const audioInput = document.getElementById('audio-file');
+      const fileStatus = document.getElementById('file-status');
+      const progressStatus = document.getElementById('progress-status');
+      const outputLRCText = document.getElementById('output-lrc-text'); 
+      
+      let lyricsArray = [];
+      let timingIndex = 0;
+      let lrcLines = [];
+      let audioFile = null; 
+      let rawLyricsText = "";
+
+      // --- 1. ファイル選択/D&Dのイベントリスナー（変更なし） ---
+      
+      audioInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+      });
+
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+      });
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false);
+      });
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false);
+      });
+      dropArea.addEventListener('drop', handleDrop, false);
+
+      function preventDefaults (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      function highlight() { dropArea.classList.add('highlight'); }
+      function unhighlight() { dropArea.classList.remove('highlight'); }
+      function handleDrop(e) {
+        let dt = e.dataTransfer;
+        let files = dt.files;
+        handleFiles(files);
+      }
+      
+      function handleFiles(files) {
+        const allowedTypes = ['audio/mp3', 'audio/mpeg', 'audio/x-mp3'];
+        const mp3File = Array.from(files).find(file => allowedTypes.includes(file.type.toLowerCase()));
+        
+        if (mp3File) {
+          audioFile = mp3File;
+          fileStatus.textContent = `選択されたファイル: ${audioFile.name}`;
+          dropArea.classList.add('file-loaded');
+          fileStatus.style.color = '#28a745'; 
+        } else {
+          const fallbackFile = Array.from(files).find(file => file.name.toLowerCase().endsWith('.mp3'));
+          
+          if (fallbackFile) {
+              audioFile = fallbackFile;
+              fileStatus.textContent = `選択されたファイル: ${fallbackFile.name} (MIMEタイプ不明のため拡張子で許可)`;
+              dropArea.classList.add('file-loaded');
+              fileStatus.style.color = '#28a745'; 
+          } else {
+              alert('有効なMP3ファイルを選択してください。');
+              audioFile = null;
+              fileStatus.textContent = 'ファイルが選択されていません';
+              dropArea.classList.remove('file-loaded');
+              fileStatus.style.color = '#cc0000'; 
+          }
+        }
+      }
+
+      // --- 2. セットアップ処理 ---
+
+      function generateLRCHeader() {
+          const title = document.getElementById('input-title').value || 'Untitled';
+          const artist = document.getElementById('input-artist').value || 'Unknown Artist';
+          return `[ti:${title}]\n[ar:${artist}]\n[al:Generated by GAS Tool]\n`;
+      }
+
+      function startSetup() {
+        rawLyricsText = inputLyrics.value.trim();
+        
+        if (!audioFile || !rawLyricsText) {
+          alert('MP3ファイルと歌詞を入力してください。');
+          return;
+        }
+
+        lyricsArray = rawLyricsText.split('\n').filter(line => line.trim() !== '');
+        timingIndex = 0;
+        lrcLines = [];
+        
+        const audioURL = URL.createObjectURL(audioFile);
+        audioPlayer.src = audioURL;
+        
+        // UIの切り替え
+        document.getElementById('setup-area').classList.add('hidden');
+        document.getElementById('timing-area').classList.remove('hidden');
+
+        // LRC出力エリアをすぐに表示
+        document.getElementById('lrc-output-area').classList.remove('hidden');
+
+        // LRCヘッダーでテキストエリアを初期化
+        outputLRCText.value = generateLRCHeader();
+        
+        // 最初の歌詞を表示
+        updateLyricsDisplay();
+        
+        alert('設定が完了しました。再生を開始し、歌い出しに合わせて画面下部をタップしてください。');
+      }
+
+      // --- 3. タイムスタンプ記録処理 ---
+
+      function recordTime(event) {
+        if (event.type === 'mousedown' && event.button !== 0) return;
+        if (event.type === 'touchstart') {
+            event.preventDefault();
+        }
+
+        if (timingIndex >= lyricsArray.length) {
+          tapControl.textContent = '完了しました！';
+          return;
+        }
+        
+        const currentTime = audioPlayer.currentTime;
+        const currentLyric = lyricsArray[timingIndex];
+        
+        const minutes = Math.floor(currentTime / 60);
+        const seconds = currentTime % 60;
+        const timeStamp = `[${String(minutes).padStart(2, '0')}:${seconds.toFixed(2).padStart(5, '0')}]`;
+        
+        const newLRCLine = timeStamp + currentLyric;
+        lrcLines.push(newLRCLine);
+        
+        // リアルタイムでLRCテキストエリアを更新
+        outputLRCText.value += newLRCLine + '\n';
+        // テキストエリアの末尾にスクロール
+        outputLRCText.scrollTop = outputLRCText.scrollHeight;
+
+
+        timingIndex++;
+        updateLyricsDisplay();
+      }
+      
+      // --- 4. ひとつ戻る (Undo) 機能 ---
+      
+      function updateOutputLRC() {
+          // LRCヘッダーとlrcLinesの内容を結合して、出力エリアを再構築
+          outputLRCText.value = generateLRCHeader() + lrcLines.join('\n') + (lrcLines.length > 0 ? '\n' : '');
+          outputLRCText.scrollTop = outputLRCText.scrollHeight;
+      }
+
+      function undoTiming() {
+        if (timingIndex > 0) {
+          if (confirm('最後のタイムスタンプを削除しますか？')) {
+              // 1. 内部データ (lrcLines) を戻す
+              lrcLines.pop();
+              
+              // 2. インデックスを戻す
+              timingIndex--;
+  
+              // 3. LRC出力エリアを更新 (再構築)
+              updateOutputLRC(); 
+              
+              // 4. 歌詞表示と進行状況を更新
+              updateLyricsDisplay();
+              
+              // 5. タップコントロールのメッセージをリセット
+              tapControl.textContent = 'TAP TO SYNC';
+          }
+        } else {
+          alert('記録されたタイムスタンプがありません。');
+        }
+      }
+
+      // --- 5. 特殊文字挿入機能 ---
+      
+      function insertCharacter(char) {
+        const textarea = inputLyrics; 
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const value = textarea.value;
+
+        // カーソル位置に文字を挿入
+        textarea.value = value.substring(0, start) + char + value.substring(end);
+        
+        // カーソルを挿入した文字の直後に移動
+        textarea.selectionStart = textarea.selectionEnd = start + char.length;
+        textarea.focus();
+      }
+
+
+      // --- 6. UI更新とダウンロード/コピー処理 ---
+
+      function updateLyricsDisplay() {
+        const totalLines = lyricsArray.length;
+        
+        if (timingIndex < totalLines) {
+          progressStatus.textContent = `進行状況: ${timingIndex + 1}行目 / 全${totalLines}行`;
+
+          currentLineDisplay.textContent = lyricsArray[timingIndex];
+          nextLinesDisplay.innerHTML = lyricsArray.slice(timingIndex + 1, timingIndex + 4).join('<br>');
+        } else {
+          progressStatus.textContent = `✅ 完了: 全${totalLines}行のタイミングを記録しました！`;
+          
+          currentLineDisplay.textContent = '全ての行が完了しました！';
+          nextLinesDisplay.textContent = '';
+          tapControl.textContent = '記録完了。LRCテキストエリアを確認してください。';
+        }
+      }
+
+      function resetTiming() {
+        if (confirm('タイムスタンプの記録をリセットしますか？')) {
+          timingIndex = 0;
+          lrcLines = [];
+          audioPlayer.currentTime = 0;
+          tapControl.textContent = 'TAP TO SYNC';
+          
+          // LRCテキストエリアをリセット (ヘッダーのみ残す)
+          outputLRCText.value = generateLRCHeader();
+          
+          updateLyricsDisplay();
+        }
+      }
+
+      function sanitizeFilename(filename) {
+        return filename.replace(/[\\/:*?"<>|]/g, '_').trim();
+      }
+
+      // LRCテキストをコピーする関数
+      function copyLRC() {
+          outputLRCText.select();
+          try {
+              document.execCommand('copy');
+              alert('LRCテキストがクリップボードにコピーされました！');
+          } catch (err) {
+              alert('コピーに失敗しました。手動でテキストエリアの内容をコピーしてください。');
+          }
+      }
+
+      // LRCファイルをダウンロードする関数 (GAS経由)
+      function downloadLRCFile() {
+        if (lrcLines.length === 0) {
+            alert('まだタイムスタンプが記録されていません。');
+            return;
+        }
+        
+        const data = {
+          title: sanitizeFilename(document.getElementById('input-title').value),
+          artist: sanitizeFilename(document.getElementById('input-artist').value),
+          lrcLines: lrcLines
+        };
+        
+        google.script.run
+          .withSuccessHandler(function(output) {
+            alert('LRCファイルがダウンロードされます。');
+          })
+          .withFailureHandler(function(error) {
+            alert('LRCファイルダウンロードに失敗しました: ' + error);
+          })
+          .generateLRC(data);
+      }
+      
+      // TXTファイルをダウンロードする関数
+      function downloadTXT() {
+        if (!inputLyrics.value.trim()) {
+            alert('歌詞を入力してください。');
+            return;
+        }
+        
+        const data = {
+          title: sanitizeFilename(document.getElementById('input-title').value),
+          rawLyrics: inputLyrics.value.trim()
+        };
+
+        google.script.run
+          .withSuccessHandler(function(output) {
+            alert('TXTファイルがダウンロードされます。');
+          })
+          .withFailureHandler(function(error) {
+            alert('TXT生成に失敗しました: ' + error);
+          })
+          .generateTXT(data);
+      }
+    </script>
+  </body>
+</html>
