@@ -1,0 +1,213 @@
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 20px;
+    background-color: #f4f7f6;
+  }
+  
+  #setup-area, #timing-area {
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background-color: #fff;
+    margin-bottom: 20px;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  input[type="text"], textarea {
+    width: 90%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  textarea {
+    height: 150px;
+    resize: vertical;
+  }
+
+  button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+    white-space: nowrap; /* ボタン内の文字が改行しないように */
+  }
+  
+  button:hover {
+    background-color: #0056b3;
+  }
+  
+  #audio-player {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  /* --- 進行状況/歌詞表示エリア --- */
+  #progress-status {
+    text-align: center;
+    font-weight: bold;
+    color: #007bff;
+    margin-bottom: 15px;
+    padding: 5px;
+    background-color: #e6f2ff;
+    border-radius: 4px;
+  }
+  
+  #lyrics-display {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .current-line-style {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #333;
+    min-height: 1.5em; 
+  }
+
+  #next-lines {
+    color: #777;
+    margin-top: 10px;
+    min-height: 3em;
+  }
+
+  /* --- LRC出力エリアのスタイル --- */
+  #lrc-output-area {
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid #ddd;
+  }
+
+  #output-lrc-text {
+      width: 95%; 
+      height: 300px;
+      background-color: #f8f8f8;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+  }
+  
+  /* --- ドラッグ＆ドロップエリア --- */
+  #drop-area {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    text-align: center;
+    color: #777;
+    transition: border-color 0.3s;
+  }
+  
+  /* --- タップ操作エリア --- */
+  #tap-control {
+    background-color: #28a745;
+    color: white;
+    padding: 30px;
+    text-align: center;
+    font-size: 1.8em;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none; 
+    touch-action: manipulation; 
+    margin-bottom: 15px;
+  }
+
+  /* ボタンコンテナ */
+  .controls {
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      flex-wrap: wrap;
+  }
+  
+  .controls button {
+    margin-top: 0;
+  }
+
+  /* セットアップ/出力エリアのコントロール調整 */
+  .setup-controls {
+      justify-content: space-between;
+  }
+
+  .output-controls {
+      justify-content: center;
+      margin-bottom: 15px;
+  }
+
+  .timing-controls-bottom {
+      justify-content: space-between;
+      margin-top: 20px;
+  }
+  
+  /* --- 特殊文字コントロール --- */
+  .char-controls {
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px dashed #ccc;
+      border-radius: 4px;
+  }
+
+  .char-controls p {
+      margin-top: 0;
+      font-size: 0.9em;
+      font-weight: bold;
+  }
+
+  .char-controls button {
+      background-color: #6f42c1; /* 紫系 */
+      padding: 5px 10px;
+      font-size: 1.1em;
+      margin-right: 5px;
+      margin-top: 5px;
+  }
+  
+  /* --- ひとつ戻るボタン --- */
+  .undo-button {
+      background-color: #ffc107; /* 黄色系 */
+      color: #333;
+      font-weight: bold;
+      border: 1px solid #d39e00;
+  }
+
+  .undo-button:hover {
+      background-color: #e0a800;
+  }
+
+
+  /* ファイルステータスなどその他の変更なしのスタイル */
+  #drop-area.highlight {
+    border-color: #007bff;
+    background-color: #f0f7ff;
+  }
+  
+  #drop-area.file-loaded {
+    border: 2px solid #28a745;
+    background-color: #e6ffe6;
+  }
+  
+  #drop-area p {
+    margin: 5px 0;
+  }
+
+  #audio-file {
+    margin-top: 10px;
+  }
+
+  #file-status {
+    text-align: center;
+    font-weight: bold;
+    color: #cc0000;
+    margin-bottom: 15px;
+  }
+  
+  #drop-area.file-loaded + #file-status {
+    color: #28a745;
+  }
+</style>
