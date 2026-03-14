@@ -1,359 +1,1649 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <?!= include('Stylesheet'); ?>
-  </head>
-  <body>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LRC Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #12101e;
+      --surface: rgba(255,255,255,0.07);
+      --surface-hover: rgba(255,255,255,0.13);
+      --border: rgba(255,255,255,0.14);
+      --accent: #a78bfa;
+      --accent2: #60a5fa;
+      --accent-glow: rgba(167,139,250,0.28);
+      --text: #f1f0f5;
+      --muted: rgba(241,240,245,0.42);
+      --success: #34d399;
+      --warn: #fbbf24;
+      --danger: #f87171;
+      --mono: 'Space Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+    html, body {
+      height: 100%; background: var(--bg);
+      color: var(--text); font-family: var(--sans);
+      overflow: hidden;
+    }
 
-    <h2>🎤 LRCタイミング付与ツール</h2>
+    /* ── BACKGROUND ── */
+    #bg-art {
+      position: fixed; inset: 0; z-index: 0;
+      background-size: cover; background-position: center;
+      filter: blur(28px) brightness(0.45) saturate(1.3);
+      transform: scale(1.12); opacity: 0;
+      transition: opacity 1.4s ease;
+    }
+    #bg-art.visible { opacity: 1; }
+    #bg-noise {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    }
 
-    <div id="setup-area">
-      
-      <div id="drop-area">
-        <p>🎵 MP3ファイルをここにドラッグ＆ドロップ</p>
-        <p>または</p>
-        <input type="file" id="audio-file" accept="audio/mp3">
-      </div>
-      
-      <p id="file-status">ファイルが選択されていません</p>
+    /* ── APP GRID ── */
+    #app {
+      position: relative; z-index: 2;
+      display: grid; grid-template-columns: 300px 1fr;
+      height: 100vh; overflow: hidden;
+    }
 
-      <input type="text" id="input-title" placeholder="曲のタイトル (ti:ヘッダー)">
-      <input type="text" id="input-artist" placeholder="アーティスト名 (ar:ヘッダー)">
-      
-      <div class="char-controls">
-        <p>音符・特殊文字の挿入 (歌詞入力欄用):</p>
-        <button onclick="insertCharacter('♪')">♪</button>
-        <button onclick="insertCharacter('♫')">♫</button>
-        <button onclick="insertCharacter('★')">★</button>
-        <button onclick="insertCharacter('—')">—</button>
-      </div>
-      <textarea id="input-lyrics" placeholder="ここに歌詞をペーストしてください（一行ずつ）"></textarea>
-      
-      <div class="controls setup-controls">
-          <button onclick="startSetup()">設定完了 / スタート</button>
-          <button onclick="downloadTXT()" id="download-txt-setup-btn">TXTダウンロード</button>
+    /* ═══════════════════ LEFT PANEL ═══════════════════ */
+    #left {
+      display: flex; flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: rgba(18,15,32,0.55);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      overflow-y: auto; overflow-x: hidden;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    #left::-webkit-scrollbar { width: 3px; }
+    #left::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* logo */
+    .logo-bar {
+      padding: 20px 22px 15px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .logo { font-size: 20px; font-weight: 800; line-height: 1; letter-spacing: -.01em; }
+    .logo em { color: var(--accent); font-style: normal; }
+    .logo-sub { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+    /* album art */
+    #art-wrap {
+      margin: 16px 22px 0; aspect-ratio: 1; border-radius: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      overflow: hidden; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: box-shadow .7s;
+    }
+    #art-wrap.glow { box-shadow: 0 0 44px var(--accent-glow); }
+    #art-img { width: 100%; height: 100%; object-fit: cover; display: none; }
+    #art-img.on { display: block; }
+    #art-ph { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); }
+    #art-ph svg { width: 46px; height: 46px; opacity: .28; }
+    #art-ph span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+
+    /* track meta */
+    #track-meta { padding: 12px 22px 0; flex-shrink: 0; }
+    #t-title { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #t-artist { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* waveform */
+    #wave-area { padding: 14px 22px 0; flex-shrink: 0; }
+    #wave-canvas { width: 100%; height: 56px; display: block; border-radius: 6px; cursor: pointer; }
+    #prog-wrap { margin-top: 7px; height: 3px; background: var(--surface-hover); border-radius: 99px; overflow: hidden; cursor: pointer; }
+    #prog-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .1s linear; }
+    #time-row { display: flex; justify-content: space-between; font-size: 10px; font-family: var(--mono); color: var(--muted); margin-top: 4px; }
+
+    /* transport controls */
+    #transport { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 22px; flex-shrink: 0; }
+    .t-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); padding: 8px; border-radius: 50%;
+      transition: color .18s, background .18s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .t-btn:hover { color: var(--text); background: var(--surface-hover); }
+    #btn-play {
+      width: 50px; height: 50px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      box-shadow: 0 0 24px var(--accent-glow);
+      transition: background .18s;
+    }
+    #btn-play:hover { background: #c4b5fd; color: #fff; }
+
+    /* TAP / STAMP button */
+    #tap-btn {
+      margin: 6px 22px 0; padding: 18px 0; border-radius: 12px;
+      border: 1.5px solid var(--accent); background: transparent; color: var(--accent);
+      font-family: var(--sans); font-size: 14px; font-weight: 800;
+      letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: background .18s, box-shadow .18s, transform .1s; flex-shrink: 0;
+      touch-action: manipulation; user-select: none;
+    }
+    #tap-btn:hover  { background: var(--accent-glow); box-shadow: 0 0 20px var(--accent-glow); }
+    #tap-btn:active { transform: scale(.96); }
+    .kbd { background: var(--surface-hover); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; font-size: 10px; font-family: var(--mono); color: var(--muted); }
+
+    /* undo */
+    #undo-row { margin: 8px 22px 0; flex-shrink: 0; }
+    #btn-undo {
+      width: 100%; padding: 10px 0; border-radius: 8px;
+      border: 1px solid rgba(251,191,36,.3); background: rgba(251,191,36,.06);
+      color: var(--warn); font-family: var(--sans); font-size: 11px; font-weight: 700;
+      letter-spacing: .07em; text-transform: uppercase; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background .18s, box-shadow .18s;
+    }
+    #btn-undo:hover   { background: rgba(251,191,36,.14); box-shadow: 0 0 14px rgba(251,191,36,.18); }
+    #btn-undo:disabled { opacity: .28; cursor: not-allowed; }
+
+    /* special char panel */
+    #char-panel { margin: 10px 22px 0; flex-shrink: 0; }
+    .sec-label { font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+    #char-btns { display: flex; flex-wrap: wrap; gap: 5px; }
+    .char-btn {
+      padding: 5px 11px; border-radius: 7px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); font-size: 15px; cursor: pointer;
+      transition: background .14s, border-color .14s, transform .1s;
+    }
+    .char-btn:hover  { background: var(--surface-hover); border-color: var(--accent); }
+    .char-btn:active { transform: scale(.88); }
+
+    /* progress display (inside left panel) */
+    #progress-wrap { margin: 10px 22px 0; flex-shrink: 0; }
+    #progress-pill {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 9px 14px; font-size: 11px; font-family: var(--mono); color: var(--muted);
+      text-align: center;
+    }
+    #progress-pill.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+    #progress-pill.done   { border-color: var(--success); color: var(--success); background: rgba(52,211,153,.08); }
+
+    /* meta inputs */
+    #meta-area {
+      padding: 12px 22px; border-top: 1px solid var(--border);
+      flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;
+      margin-top: auto;
+    }
+    .f-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+    .f-input {
+      width: 100%; padding: 8px 12px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+      font-family: var(--sans); font-size: 13px; outline: none;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .f-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+    /* upload zone */
+    #upload-zone {
+      margin: 0 22px 16px; padding: 12px; flex-shrink: 0;
+      border: 1.5px dashed var(--border); border-radius: 9px;
+      cursor: pointer; color: var(--muted); font-size: 11px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: border-color .2s, background .2s, color .2s;
+    }
+    #upload-zone:hover,
+    #upload-zone.drag-over { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+    #upload-zone.loaded    { border-style: solid; border-color: var(--success); color: var(--success); background: rgba(52,211,153,.07); }
+    #file-input { display: none; }
+
+    /* ═══════════════════ RIGHT PANEL ═══════════════════ */
+    #right {
+      display: grid; grid-template-rows: auto 1fr auto;
+      overflow: hidden;
+      background: rgba(18,15,32,0.35);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    #right-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 28px; border-bottom: 1px solid var(--border);
+    }
+    #right-head h2 { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+    #line-badge { font-size: 10px; font-family: var(--mono); padding: 3px 9px; border-radius: 99px; background: var(--surface-hover); border: 1px solid var(--border); color: var(--muted); }
+
+    /* two-pane editor */
+    #panes { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+    .pane { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
+    .pane:last-child { border-right: none; }
+    .pane-head {
+      padding: 9px 18px; font-size: 9px; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .ph-btns { display: flex; gap: 4px; }
+    .ph-btn {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      font-size: 9px; font-family: var(--sans); letter-spacing: .08em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 5px; border: 1px solid transparent;
+      transition: color .15s, background .15s, border-color .15s;
+    }
+    .ph-btn:hover            { color: var(--text); background: var(--surface-hover); }
+    .ph-btn.danger:hover     { color: var(--danger); border-color: rgba(248,113,113,.3); }
+    .ph-btn.accent-btn:hover { color: var(--accent); border-color: rgba(167,139,250,.3); }
+
+    /* lyrics textarea */
+    #lyrics-wrap { flex: 1; overflow: hidden; position: relative; }
+    #lyrics-in {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      background: transparent; border: none; outline: none; resize: none;
+      color: var(--text); font-family: var(--mono); font-size: 13px;
+      line-height: 1.9; padding: 18px 20px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+
+    /* current-line highlight in right pane */
+    #lyrics-display-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #current-line-display {
+      padding: 20px 20px 8px;
+      font-size: 18px; font-weight: 700; color: var(--text); line-height: 1.4;
+      min-height: 64px; flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    #current-line-display::before {
+      content: 'NOW';
+      position: absolute; top: 8px; left: 20px;
+      font-size: 8px; letter-spacing: .18em; color: var(--accent); font-family: var(--mono);
+    }
+    #next-lines-display {
+      flex: 1; overflow-y: auto; padding: 12px 20px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .next-line-row {
+      padding: 5px 0; font-size: 13px; color: var(--muted);
+      font-family: var(--mono); border-bottom: 1px solid var(--border);
+      display: flex; gap: 10px; align-items: baseline;
+    }
+    .next-line-row .nl-num { font-size: 10px; color: rgba(241,240,245,.2); min-width: 18px; }
+    .lrc-done-row {
+      display: flex; align-items: center; padding: 4px 8px; border-radius: 7px;
+      margin: 1px 0; transition: background .13s; cursor: pointer; gap: 2px;
+    }
+    .lrc-done-row:hover { background: var(--surface-hover); }
+    .lrc-done-row.active { background: rgba(167,139,250,.13); }
+    .lrc-done-row.active .lrc-ts { color: var(--accent); }
+    .lrc-ts  { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; min-width: 74px; user-select: none; }
+    .lrc-txt { font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
+
+    /* LRC raw output textarea */
+    #lrc-raw-wrap { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    #lrc-raw-wrap.on { display: flex; }
+    #lrc-raw-out {
+      flex: 1; background: transparent; border: none; outline: none; resize: none;
+      color: var(--text); font-family: var(--mono); font-size: 12px; line-height: 1.8;
+      padding: 16px 20px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+
+    /* bottom bar */
+    #bottom {
+      padding: 13px 28px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .a-btn {
+      padding: 9px 18px; border-radius: 8px; border: none;
+      font-family: var(--sans); font-size: 11px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+      transition: opacity .18s, transform .1s, box-shadow .18s, background .18s;
+      white-space: nowrap;
+    }
+    .a-btn:active { transform: scale(.96); }
+    .a-btn.pri   { background: var(--accent); color: #fff; box-shadow: 0 0 18px var(--accent-glow); }
+    .a-btn.pri:hover   { opacity: .84; }
+    .a-btn.sec   { background: var(--surface-hover); border: 1px solid var(--border); color: var(--text); }
+    .a-btn.sec:hover   { background: rgba(255,255,255,.12); }
+    .a-btn.warn-btn  { background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.3); color: var(--warn); }
+    .a-btn.warn-btn:hover  { background: rgba(251,191,36,.2); }
+    .a-btn.dng   { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.28); color: var(--danger); }
+    .a-btn.dng:hover   { background: rgba(248,113,113,.2); }
+
+    #status-msg { margin-left: auto; font-size: 10px; font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+    #status-msg.ok   { color: var(--success); }
+    #status-msg.warn { color: var(--warn); }
+    #status-msg.err  { color: var(--danger); }
+
+    /* toast */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(14px);
+      background: rgba(18,16,28,.96); border: 1px solid var(--border);
+      backdrop-filter: blur(18px); padding: 9px 22px; border-radius: 99px;
+      font-size: 12px; color: var(--text); letter-spacing: .04em;
+      opacity: 0; pointer-events: none; z-index: 999;
+      transition: opacity .26s, transform .26s;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* scrollbar global */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    @keyframes fadeUp { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:translateY(0); } }
+    .lrc-done-row { animation: fadeUp .16s ease both; }
+
+    /* ── 速度コントロール ── */
+    #speed-row {
+      display: flex; align-items: center; gap: 6px;
+      margin: 6px 22px 0; flex-shrink: 0;
+    }
+    #speed-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+    .spd-btn {
+      flex: 1; padding: 6px 0; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--muted); font-family: var(--mono); font-size: 10px; cursor: pointer;
+      transition: background .14s, color .14s, border-color .14s;
+    }
+    .spd-btn:hover  { background: var(--surface-hover); color: var(--text); }
+    .spd-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+
+    /* ── タイムスタンプ微調整 ── */
+    #adj-panel { margin: 6px 22px 0; flex-shrink: 0; }
+    #adj-panel .sec-label { margin-bottom: 5px; }
+    #adj-rows { display: flex; flex-direction: column; gap: 4px; max-height: 130px; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+    .adj-row {
+      display: flex; align-items: center; gap: 5px;
+      padding: 3px 0;
+    }
+    .adj-ts  { font-family: var(--mono); font-size: 10px; color: var(--accent); flex-shrink: 0; min-width: 62px; }
+    .adj-txt { font-size: 11px; color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .adj-btn {
+      padding: 3px 7px; border-radius: 5px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--muted); font-size: 11px; cursor: pointer;
+      font-family: var(--mono); transition: background .12s, color .12s;
+      flex-shrink: 0;
+    }
+    .adj-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+  </style>
+</head>
+<body>
+
+<div id="bg-art"></div>
+<div id="bg-noise"></div>
+<audio id="audio"></audio>
+
+<div id="app">
+
+  <!-- ═══ LEFT PANEL ═══ -->
+  <div id="left">
+
+    <div class="logo-bar">
+      <div class="logo">LRC<em>•</em>STUDIO</div>
+      <div class="logo-sub">Lyric Timing Tool</div>
+    </div>
+
+    <!-- Album art -->
+    <div id="art-wrap">
+      <img id="art-img" alt="Album Art">
+      <div id="art-ph">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>
+          <path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21"/>
+        </svg>
+        <span>No Track</span>
       </div>
     </div>
 
-    <div id="timing-area" class="hidden">
-      <audio id="audio-player" controls></audio>
-      
-      <p id="progress-status"></p>
-      
-      <div id="lyrics-display">
-        <p id="current-line" class="current-line-style">タップして開始</p>
-        <div id="next-lines"></div>
-      </div>
+    <!-- Track name -->
+    <div id="track-meta">
+      <div id="t-title">—</div>
+      <div id="t-artist">unknown artist</div>
+    </div>
 
-      <div id="tap-control" ontouchstart="recordTime(event)" onmousedown="recordTime(event)">
-        <p>TAP TO SYNC</p>
+    <!-- Waveform + progress bar -->
+    <div id="wave-area">
+      <canvas id="wave-canvas" height="56"></canvas>
+      <div id="prog-wrap"><div id="prog-bar"></div></div>
+      <div id="time-row"><span id="t-cur">0:00</span><span id="t-tot">0:00</span></div>
+    </div>
+
+    <!-- Transport -->
+    <div id="transport">
+      <button class="t-btn" id="btn-back" title="5秒戻す">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
+        </svg>
+      </button>
+      <button class="t-btn" id="btn-play" title="再生 / 一時停止">
+        <svg id="ico-play" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        <svg id="ico-pause" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      </button>
+      <button class="t-btn" id="btn-fwd" title="5秒進む">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.95"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- 再生速度 -->
+    <div id="speed-row">
+      <span id="speed-label">Speed</span>
+      <button class="spd-btn" data-spd="0.5">0.5x</button>
+      <button class="spd-btn" data-spd="0.75">0.75x</button>
+      <button class="spd-btn active" data-spd="1">1x</button>
+      <button class="spd-btn" data-spd="1.25">1.25x</button>
+      <button class="spd-btn" data-spd="1.5">1.5x</button>
+    </div>
+
+    <!-- TAP TO SYNC -->
+    <div id="tap-btn"
+         ontouchstart="handleTap(event)"
+         onmousedown="handleTap(event)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M2 12h20"/></svg>
+      TAP TO SYNC
+      <span class="kbd">Space</span>
+    </div>
+
+    <!-- Undo -->
+    <div id="undo-row">
+      <button id="btn-undo" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+        ひとつ戻す
+        <span class="kbd">Ctrl+Z</span>
+      </button>
+    </div>
+
+    <!-- タイムスタンプ微調整 -->
+    <div id="adj-panel">
+      <div class="sec-label">タイムスタンプ微調整 (±0.1秒)</div>
+      <div id="adj-rows"><div style="font-size:11px;color:var(--muted);padding:4px 0;">タイムスタンプなし</div></div>
+    </div>
+
+    <!-- Special chars -->
+    <div id="char-panel">
+      <div class="sec-label">特殊文字を挿入</div>
+      <div id="char-btns">
+        <button class="char-btn" data-char="♪">♪</button>
+        <button class="char-btn" data-char="♫">♫</button>
+        <button class="char-btn" data-char="★">★</button>
+        <button class="char-btn" data-char="☆">☆</button>
+        <button class="char-btn" data-char="〜">〜</button>
+        <button class="char-btn" data-char="…">…</button>
+        <button class="char-btn" data-char="—">—</button>
+        <button class="char-btn" data-char="・">・</button>
+        <button class="char-btn" data-char="／">／</button>
       </div>
-      
-      <div id="lrc-output-area" class="hidden">
-          <h3>生成されたLRCテキスト</h3>
-          <textarea id="output-lrc-text" readonly></textarea>
-          
-          <div class="controls output-controls">
-            <button onclick="copyLRC()">LRCテキストをコピー</button> 
-            <button onclick="downloadLRCFile()">LRCファイルをダウンロード</button>
+    </div>
+
+    <!-- Progress pill -->
+    <div id="progress-wrap">
+      <div id="progress-pill">待機中</div>
+    </div>
+
+    <!-- Meta -->
+    <div id="meta-area">
+      <div>
+        <div class="f-label">タイトル</div>
+        <input class="f-input" id="in-title" type="text" placeholder="Song Title">
+      </div>
+      <div>
+        <div class="f-label">アーティスト</div>
+        <input class="f-input" id="in-artist" type="text" placeholder="Artist Name">
+      </div>
+    </div>
+
+    <!-- Upload / Drop zone -->
+    <div id="upload-zone">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <span id="upload-label">MP3 / FLAC / M4A を読み込む</span>
+    </div>
+    <input type="file" id="file-input" accept="audio/*,.mp3,.flac,.m4a,.aac,.ogg">
+
+    <!-- LRCファイル読み込み -->
+    <div id="upload-zone" id="lrc-zone" style="margin-top:6px;"
+         onclick="document.getElementById('lrc-file-input').click()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+      </svg>
+      <span>.lrc ファイルを読み込む</span>
+    </div>
+    <input type="file" id="lrc-file-input" accept=".lrc,text/plain">
+
+
+  </div><!-- /left -->
+
+  <!-- ═══ RIGHT PANEL ═══ -->
+  <div id="right">
+
+    <div id="right-head">
+      <h2>Lyric Editor</h2>
+      <span id="line-badge">0 lines</span>
+    </div>
+
+    <div id="panes">
+
+      <!-- LEFT PANE: lyrics input -->
+      <div class="pane">
+        <div class="pane-head">
+          <span>歌詞を入力</span>
+          <div class="ph-btns">
+            <button class="ph-btn danger" onclick="clearLyrics()">クリア</button>
           </div>
+        </div>
+        <div id="lyrics-wrap">
+          <textarea id="lyrics-in" spellcheck="false"
+            placeholder="ここに歌詞を1行ずつ貼り付けてください…&#10;&#10;例：&#10;Hello world&#10;♪ Instrumental ♪&#10;この行にタイミングを打ちます"></textarea>
+        </div>
       </div>
 
+      <!-- RIGHT PANE: live display + LRC output toggle -->
+      <div class="pane">
+        <div class="pane-head">
+          <span id="rpane-label">タイミング</span>
+          <div class="ph-btns">
+            <button class="ph-btn accent-btn" id="btn-toggle-view" onclick="toggleRightView()">LRC テキスト表示</button>
+            <button class="ph-btn accent-btn" onclick="copyLRC()">コピー</button>
+            <button class="ph-btn danger" onclick="clearTimestamps()">タイム削除</button>
+          </div>
+        </div>
 
-      <div class="controls timing-controls-bottom">
-        <button onclick="undoTiming()" class="undo-button">↩ ひとつ戻る</button> 
-        <button onclick="resetTiming()">リセット</button>
-        <button onclick="downloadTXT()">TXTダウンロード</button>
+        <!-- Live timing view -->
+        <div id="lyrics-display-pane">
+          <div id="current-line-display">タップして開始</div>
+          <div id="next-lines-display"></div>
+        </div>
+
+        <!-- Raw LRC text view (toggleable) -->
+        <div id="lrc-raw-wrap">
+          <textarea id="lrc-raw-out" readonly spellcheck="false"></textarea>
+        </div>
       </div>
+
+    </div><!-- /panes -->
+
+    <!-- Bottom action bar -->
+    <div id="bottom">
+      <button class="a-btn pri"      onclick="downloadLRCFile()">LRC ダウンロード</button>
+      <button class="a-btn sec"      onclick="downloadTXT()">TXT ダウンロード</button>
+      <button class="a-btn warn-btn" onclick="resetTiming()">タイムリセット</button>
+      <button class="a-btn dng"      onclick="resetAll()">全リセット</button>
+      <div id="status-msg"></div>
     </div>
 
-    <script>
-      const audioPlayer = document.getElementById('audio-player');
-      const inputLyrics = document.getElementById('input-lyrics');
-      const currentLineDisplay = document.getElementById('current-line');
-      const nextLinesDisplay = document.getElementById('next-lines');
-      const tapControl = document.getElementById('tap-control');
-      const dropArea = document.getElementById('drop-area');
-      const audioInput = document.getElementById('audio-file');
-      const fileStatus = document.getElementById('file-status');
-      const progressStatus = document.getElementById('progress-status');
-      const outputLRCText = document.getElementById('output-lrc-text'); 
-      
-      let lyricsArray = [];
-      let timingIndex = 0;
-      let lrcLines = [];
-      let audioFile = null; 
-      let rawLyricsText = "";
+  </div><!-- /right -->
+</div><!-- /app -->
 
-      // --- 1. ファイル選択/D&Dのイベントリスナー（変更なし） ---
-      
-      audioInput.addEventListener('change', (e) => {
-        handleFiles(e.target.files);
-      });
+<div id="toast"></div>
 
-      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, preventDefaults, false);
-      });
-      ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, highlight, false);
-      });
-      ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, unhighlight, false);
-      });
-      dropArea.addEventListener('drop', handleDrop, false);
+<script>
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+const ST = {
+  lyricsArray : [],   // all lines
+  timingIndex : 0,    // next line to stamp
+  lrcLines    : [],   // stamped lines  e.g. "[01:23.45]text"
+  undoStack   : [],   // {index, line} for undo
+  audioFile   : null,
+  rawLyrics   : '',
+  isPlaying   : false,
+  duration    : 0,
+  loaded      : false,
+  rightView   : 'live',  // 'live' | 'raw'
+};
 
-      function preventDefaults (e) {
-        e.preventDefault();
-        e.stopPropagation();
+// ═══════════════════════════════════════════════════════
+//  ELEMENT REFS
+// ═══════════════════════════════════════════════════════
+const audio        = document.getElementById('audio');
+const progBar      = document.getElementById('prog-bar');
+const progWrap     = document.getElementById('prog-wrap');
+const tCur         = document.getElementById('t-cur');
+const tTot         = document.getElementById('t-tot');
+const artImg       = document.getElementById('art-img');
+const artPh        = document.getElementById('art-ph');
+const artWrap      = document.getElementById('art-wrap');
+const bgArt        = document.getElementById('bg-art');
+const lyricsIn     = document.getElementById('lyrics-in');
+const inTitle      = document.getElementById('in-title');
+const inArtist     = document.getElementById('in-artist');
+const lineBadge    = document.getElementById('line-badge');
+const wCanvas      = document.getElementById('wave-canvas');
+const wCtx         = wCanvas.getContext('2d');
+const statusEl     = document.getElementById('status-msg');
+const fileInput    = document.getElementById('file-input');
+const uploadZone   = document.getElementById('upload-zone');
+const uploadLabel  = document.getElementById('upload-label');
+const icoPlay      = document.getElementById('ico-play');
+const icoPause     = document.getElementById('ico-pause');
+const btnUndo      = document.getElementById('btn-undo');
+const progressPill = document.getElementById('progress-pill');
+const curLineDisp  = document.getElementById('current-line-display');
+const nextDisp     = document.getElementById('next-lines-display');
+const lrcRawWrap   = document.getElementById('lrc-raw-wrap');
+const lrcRawOut    = document.getElementById('lrc-raw-out');
+const livePane     = document.getElementById('lyrics-display-pane');
+
+// ═══════════════════════════════════════════════════════
+//  FILE LOAD  (click + drag/drop)
+// ═══════════════════════════════════════════════════════
+uploadZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadAudio(e.target.files[0]); });
+
+uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) loadAudio(f);
+});
+
+async function loadAudio(file) {
+  // allow mp3/m4a/flac/ogg/aac
+  const ok = file.type.startsWith('audio/') || /\.(mp3|m4a|flac|ogg|aac)$/i.test(file.name);
+  if (!ok) { showToast('⚠ 対応していないファイル形式です'); return; }
+
+  ST.audioFile = file;
+  audio.src = URL.createObjectURL(file);
+
+  uploadZone.classList.add('loaded');
+  uploadLabel.textContent = file.name;
+  ST.loaded = true;
+  buildStaticBars(wCanvas.offsetWidth || 256, 56);
+
+  // Parse ID3 tags
+  try {
+    const buf  = await file.arrayBuffer();
+    const tags = await parseTags(buf);
+    const name = file.name.replace(/\.[^.]+$/, '');
+    inTitle.value  = tags.title  || name;
+    inArtist.value = tags.artist || '';
+    document.getElementById('t-title').textContent  = tags.title  || name;
+    document.getElementById('t-artist').textContent = tags.artist || 'unknown artist';
+
+    if (tags.picture) {
+      const blob = new Blob([tags.picture.data], { type: tags.picture.mime });
+      const url  = URL.createObjectURL(blob);
+      artImg.src = url; artImg.classList.add('on');
+      artPh.style.display = 'none';
+      artWrap.classList.add('glow');
+      bgArt.style.backgroundImage = `url('${url}')`;
+      bgArt.classList.add('visible');
+    }
+  } catch(e) {
+    const name = file.name.replace(/\.[^.]+$/, '');
+    inTitle.value = name;
+    document.getElementById('t-title').textContent = name;
+  }
+
+  showToast('🎵 ' + (inTitle.value || file.name));
+}
+
+audio.addEventListener('loadedmetadata', () => {
+  ST.duration = audio.duration;
+  tTot.textContent = fmtTime(audio.duration);
+  drawWave();
+});
+
+// ═══════════════════════════════════════════════════════
+//  MULTI-FORMAT TAG PARSER
+//  MP3       → ID3v2.2 / v2.3 / v2.4
+//  M4A/AAC   → iTunes ilst atoms
+//  FLAC      → PICTURE metadata block + Vorbis comments
+//  OGG       → Vorbis comment / Opus tags
+//  WebM/MKV  → EBML image scan heuristic
+// ═══════════════════════════════════════════════════════
+
+async function parseTags(buf) {
+  const u8 = new Uint8Array(buf);
+
+  // ID3v2: "ID3"
+  if (u8[0]===0x49 && u8[1]===0x44 && u8[2]===0x33)
+    return parseID3v2(u8);
+
+  // MP4/M4A: 'ftyp' box at offset 4
+  if (u8.length > 11 &&
+      u8[4]===0x66 && u8[5]===0x74 && u8[6]===0x79 && u8[7]===0x70)
+    return parseMP4(u8);
+
+  // FLAC: "fLaC"
+  if (u8[0]===0x66 && u8[1]===0x4C && u8[2]===0x61 && u8[3]===0x43)
+    return parseFLAC(u8);
+
+  // OGG: "OggS"
+  if (u8[0]===0x4F && u8[1]===0x67 && u8[2]===0x67 && u8[3]===0x53)
+    return parseOGG(u8);
+
+  // WebM/MKV: EBML 0x1A45DFA3
+  if (u8[0]===0x1A && u8[1]===0x45 && u8[2]===0xDF && u8[3]===0xA3)
+    return parseWebM(u8);
+
+  // Fallback: scan first 4 KB for a stray ID3 header
+  for (let i = 1; i < Math.min(u8.length - 3, 4096); i++) {
+    if (u8[i]===0x49 && u8[i+1]===0x44 && u8[i+2]===0x33)
+      return parseID3v2(u8.slice(i));
+  }
+  return {};
+}
+
+/* ── shared helpers ── */
+function u32be(d, o) { return ((d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3]) >>> 0; }
+function u32le(d, o) { return ((d[o+3]<<24)|(d[o+2]<<16)|(d[o+1]<<8)|d[o]) >>> 0; }
+function readUtf8(d)  { try { return new TextDecoder('utf-8').decode(d).replace(/\0/g,''); } catch(e){ return ''; } }
+function readLatin1(d){ try { return new TextDecoder('latin1').decode(d).replace(/\0/g,''); } catch(e){ return ''; } }
+
+function mimeFromBytes(d) {
+  if (!d || d.length < 4) return 'image/jpeg';
+  if (d[0]===0xFF && d[1]===0xD8) return 'image/jpeg';
+  if (d[0]===0x89 && d[1]===0x50 && d[2]===0x4E && d[3]===0x47) return 'image/png';
+  if (d[0]===0x47 && d[1]===0x49 && d[2]===0x46) return 'image/gif';
+  if (d[0]===0x52 && d[1]===0x49 && d[4]===0x57) return 'image/webp';
+  return 'image/jpeg';
+}
+
+/* ── ID3v2 ── */
+function parseID3v2(u8) {
+  const res = {};
+  try {
+    const ver   = u8[3];
+    const flags = u8[5];
+    const hasExtHdr = !!(flags & 0x40);
+    const tagSize   = (u8[6]<<21)|(u8[7]<<14)|(u8[8]<<7)|u8[9];
+    let off = 10;
+
+    if (hasExtHdr && ver >= 3) {
+      const extSz = (ver === 4)
+        ? (u8[10]<<21)|(u8[11]<<14)|(u8[12]<<7)|u8[13]
+        : u32be(u8, 10);
+      off += (ver === 4) ? extSz : extSz + 4;
+    }
+
+    const end = Math.min(10 + tagSize, u8.length);
+
+    while (off + (ver === 2 ? 6 : 10) <= end) {
+      let fid, fsize;
+      if (ver === 2) {
+        fid   = String.fromCharCode(u8[off], u8[off+1], u8[off+2]);
+        fsize = (u8[off+3]<<16)|(u8[off+4]<<8)|u8[off+5];
+        off  += 6;
+      } else {
+        fid   = String.fromCharCode(u8[off], u8[off+1], u8[off+2], u8[off+3]);
+        fsize = (ver === 4)
+          ? (u8[off+4]<<21)|(u8[off+5]<<14)|(u8[off+6]<<7)|u8[off+7]
+          : u32be(u8, off+4);
+        off  += 10;
       }
-      function highlight() { dropArea.classList.add('highlight'); }
-      function unhighlight() { dropArea.classList.remove('highlight'); }
-      function handleDrop(e) {
-        let dt = e.dataTransfer;
-        let files = dt.files;
-        handleFiles(files);
-      }
-      
-      function handleFiles(files) {
-        const allowedTypes = ['audio/mp3', 'audio/mpeg', 'audio/x-mp3'];
-        const mp3File = Array.from(files).find(file => allowedTypes.includes(file.type.toLowerCase()));
-        
-        if (mp3File) {
-          audioFile = mp3File;
-          fileStatus.textContent = `選択されたファイル: ${audioFile.name}`;
-          dropArea.classList.add('file-loaded');
-          fileStatus.style.color = '#28a745'; 
-        } else {
-          const fallbackFile = Array.from(files).find(file => file.name.toLowerCase().endsWith('.mp3'));
-          
-          if (fallbackFile) {
-              audioFile = fallbackFile;
-              fileStatus.textContent = `選択されたファイル: ${fallbackFile.name} (MIMEタイプ不明のため拡張子で許可)`;
-              dropArea.classList.add('file-loaded');
-              fileStatus.style.color = '#28a745'; 
-          } else {
-              alert('有効なMP3ファイルを選択してください。');
-              audioFile = null;
-              fileStatus.textContent = 'ファイルが選択されていません';
-              dropArea.classList.remove('file-loaded');
-              fileStatus.style.color = '#cc0000'; 
-          }
+      if (fsize <= 0 || off + fsize > end) break;
+      const d = u8.slice(off, off + fsize);
+      off += fsize;
+
+      if (fid==='TIT2'||fid==='TT2')  res.title  = id3Str(d);
+      else if (fid==='TPE1'||fid==='TP1') res.artist = id3Str(d);
+      else if (fid==='APIC') { const p = decAPIC(d); if(p) res.picture = p; }
+      else if (fid==='PIC')  { const p = decPIC2(d); if(p) res.picture = p; }
+    }
+  } catch(e) { console.warn('ID3 err', e); }
+  return res;
+}
+
+function id3Str(d) {
+  if (!d.length) return '';
+  const b = d.slice(1);
+  try {
+    if (d[0]===0) return readLatin1(b);
+    if (d[0]===1||d[0]===2) return new TextDecoder('utf-16').decode(b).replace(/\0/g,'');
+    return readUtf8(b);
+  } catch(e){ return ''; }
+}
+
+function decAPIC(d) {
+  try {
+    const enc = d[0];
+    let i = 1;
+    // MIME string (Latin-1, null terminated)
+    let me = i;
+    while (me < d.length && d[me] !== 0) me++;
+    let mime = readLatin1(d.slice(i, me)).toLowerCase() || 'image/jpeg';
+    i = me + 1; // skip null
+    i += 1;     // skip picture type byte
+    // description (encoding-aware null terminator)
+    if (enc===1||enc===2) {
+      while (i+1 < d.length && !(d[i]===0 && d[i+1]===0)) i += 2;
+      i += 2;
+    } else {
+      while (i < d.length && d[i]!==0) i++;
+      i += 1;
+    }
+    if (i >= d.length) return null;
+    const img = d.slice(i);
+    return { mime: mimeFromBytes(img), data: img };
+  } catch(e){ return null; }
+}
+
+function decPIC2(d) {
+  try {
+    let i = 1;
+    const fmt = String.fromCharCode(d[i],d[i+1],d[i+2]).toUpperCase(); i += 3;
+    i += 1; // picture type
+    while (i < d.length && d[i]!==0) i++; i++;
+    if (i >= d.length) return null;
+    const img = d.slice(i);
+    const mime = fmt==='PNG' ? 'image/png' : 'image/jpeg';
+    return { mime: mimeFromBytes(img)||mime, data: img };
+  } catch(e){ return null; }
+}
+
+/* ── MP4 / M4A ── */
+function parseMP4(u8) {
+  const res = {};
+  try { walkBoxes(u8, 0, u8.length, res); } catch(e){ console.warn('MP4 err', e); }
+  return res;
+}
+
+function walkBoxes(u8, start, end, res) {
+  let off = start;
+  while (off + 8 <= end) {
+    let size = u32be(u8, off);
+    const type = String.fromCharCode(u8[off+4],u8[off+5],u8[off+6],u8[off+7]);
+    if (size === 0) size = end - off;
+    if (size < 8) break;
+    const bEnd = Math.min(off + size, end);
+    const inner = off + 8;
+
+    if (type==='moov'||type==='udta'||type==='ilst'||type==='trak'||type==='mdia'||type==='minf'||type==='stbl') {
+      walkBoxes(u8, inner, bEnd, res);
+    } else if (type === 'meta') {
+      // meta has a 4-byte version/flags field before children
+      walkBoxes(u8, inner + 4, bEnd, res);
+    } else if (type === '\xa9nam') {
+      res.title  = mp4DataStr(u8, inner, bEnd);
+    } else if (type === '\xa9ART' || type === '\xa9art' || type === 'aART') {
+      res.artist = mp4DataStr(u8, inner, bEnd);
+    } else if (type === 'covr') {
+      let co = inner;
+      while (co + 8 <= bEnd) {
+        const dSz = u32be(u8, co);
+        const dType = String.fromCharCode(u8[co+4],u8[co+5],u8[co+6],u8[co+7]);
+        if (dSz > 16 && dType === 'data') {
+          const img = u8.slice(co + 16, co + dSz);
+          if (img.length > 4) res.picture = { mime: mimeFromBytes(img), data: img };
         }
+        if (dSz < 8) break;
+        co += dSz;
       }
+    }
+    off = bEnd;
+  }
+}
 
-      // --- 2. セットアップ処理 ---
+function mp4DataStr(u8, start, end) {
+  // data box: size(4) 'data'(4) flags(4) locale(4) value
+  if (start + 16 >= end) return '';
+  return readUtf8(u8.slice(start + 16, end));
+}
 
-      function generateLRCHeader() {
-          const title = document.getElementById('input-title').value || 'Untitled';
-          const artist = document.getElementById('input-artist').value || 'Unknown Artist';
-          return `[ti:${title}]\n[ar:${artist}]\n[al:Generated by GAS Tool]\n`;
+/* ── FLAC ── */
+function parseFLAC(u8) {
+  const res = {};
+  try {
+    let off = 4;
+    while (off + 4 <= u8.length) {
+      const h  = u8[off];
+      const isLast = !!(h & 0x80);
+      const bt = h & 0x7F;
+      const bs = (u8[off+1]<<16)|(u8[off+2]<<8)|u8[off+3];
+      off += 4;
+      if (off + bs > u8.length) break;
+      const blk = u8.slice(off, off + bs);
+      if (bt === 4) { // VORBIS_COMMENT
+        const vc = vorbisComment(blk);
+        if (vc.title)   res.title   = vc.title;
+        if (vc.artist)  res.artist  = vc.artist;
+        if (vc.picture) res.picture = vc.picture;
+      } else if (bt === 6) { // PICTURE
+        const p = flacPicture(blk);
+        if (p) res.picture = p;
       }
+      off += bs;
+      if (isLast) break;
+    }
+  } catch(e){ console.warn('FLAC err', e); }
+  return res;
+}
 
-      function startSetup() {
-        rawLyricsText = inputLyrics.value.trim();
-        
-        if (!audioFile || !rawLyricsText) {
-          alert('MP3ファイルと歌詞を入力してください。');
-          return;
+function flacPicture(d) {
+  try {
+    let i = 4;
+    const mLen = u32be(d, i); i += 4;
+    const mime = readUtf8(d.slice(i, i + mLen)); i += mLen;
+    const dLen = u32be(d, i); i += 4 + dLen;
+    i += 16; // width height depth colors
+    const pLen = u32be(d, i); i += 4;
+    const img  = d.slice(i, i + pLen);
+    return { mime: mimeFromBytes(img)||mime, data: img };
+  } catch(e){ return null; }
+}
+
+/* ── OGG (Vorbis / Opus) ── */
+function parseOGG(u8) {
+  const res = {};
+  try {
+    let off = 0, pages = 0;
+    while (off + 27 <= u8.length && pages < 12) {
+      if (u8[off]!==0x4F||u8[off+1]!==0x67||u8[off+2]!==0x67||u8[off+3]!==0x53) { off++; continue; }
+      const nSeg  = u8[off+26];
+      let pSize   = 0;
+      for (let s = 0; s < nSeg; s++) pSize += u8[off+27+s];
+      const pOff  = off + 27 + nSeg;
+      const p     = u8.slice(pOff, pOff + pSize);
+
+      // Vorbis comment header: 0x03 + "vorbis"
+      if (p[0]===0x03 && p[1]===0x76 && p[2]===0x6F) {
+        const vc = vorbisComment(p.slice(7));
+        Object.assign(res, vc);
+      }
+      // Opus comment header: "OpusTags"
+      if (p.length > 8 && readUtf8(p.slice(0,8)) === 'OpusTags') {
+        const vc = vorbisComment(p.slice(8));
+        Object.assign(res, vc);
+      }
+      off = pOff + pSize; pages++;
+    }
+  } catch(e){ console.warn('OGG err', e); }
+  return res;
+}
+
+function vorbisComment(d) {
+  const res = {};
+  try {
+    let i = 0;
+    const vLen = u32le(d, i); i += 4 + vLen;
+    const cnt  = u32le(d, i); i += 4;
+    for (let c = 0; c < cnt && i + 4 <= d.length; c++) {
+      const len = u32le(d, i); i += 4;
+      const s   = readUtf8(d.slice(i, i + len)); i += len;
+      const eq  = s.indexOf('=');
+      if (eq < 0) continue;
+      const key = s.slice(0, eq).toUpperCase();
+      const val = s.slice(eq + 1);
+      if (key==='TITLE')  res.title  = val;
+      if (key==='ARTIST') res.artist = val;
+      if (key==='METADATA_BLOCK_PICTURE') {
+        try {
+          const bin = atob(val.replace(/\s/g,''));
+          const bd  = Uint8Array.from(bin, c => c.charCodeAt(0));
+          const p   = flacPicture(bd);
+          if (p) res.picture = p;
+        } catch(e){}
+      }
+    }
+  } catch(e){}
+  return res;
+}
+
+/* ── WebM / MKV – scan for JPEG/PNG magic ── */
+function parseWebM(u8) {
+  const res = {};
+  try {
+    const limit = Math.min(u8.length, 524288); // 512 KB
+    for (let i = 0; i < limit - 4; i++) {
+      if (u8[i]===0xFF && u8[i+1]===0xD8 && u8[i+2]===0xFF) {
+        // JPEG – find end marker FF D9
+        const slice = u8.slice(i, Math.min(i + 2097152, u8.length));
+        let end = slice.length;
+        for (let j = 2; j < slice.length - 1; j++) {
+          if (slice[j]===0xFF && slice[j+1]===0xD9) { end = j + 2; break; }
         }
-
-        lyricsArray = rawLyricsText.split('\n').filter(line => line.trim() !== '');
-        timingIndex = 0;
-        lrcLines = [];
-        
-        const audioURL = URL.createObjectURL(audioFile);
-        audioPlayer.src = audioURL;
-        
-        // UIの切り替え
-        document.getElementById('setup-area').classList.add('hidden');
-        document.getElementById('timing-area').classList.remove('hidden');
-
-        // LRC出力エリアをすぐに表示
-        document.getElementById('lrc-output-area').classList.remove('hidden');
-
-        // LRCヘッダーでテキストエリアを初期化
-        outputLRCText.value = generateLRCHeader();
-        
-        // 最初の歌詞を表示
-        updateLyricsDisplay();
-        
-        alert('設定が完了しました。再生を開始し、歌い出しに合わせて画面下部をタップしてください。');
+        res.picture = { mime: 'image/jpeg', data: slice.slice(0, end) };
+        break;
       }
-
-      // --- 3. タイムスタンプ記録処理 ---
-
-      function recordTime(event) {
-        if (event.type === 'mousedown' && event.button !== 0) return;
-        if (event.type === 'touchstart') {
-            event.preventDefault();
-        }
-
-        if (timingIndex >= lyricsArray.length) {
-          tapControl.textContent = '完了しました！';
-          return;
-        }
-        
-        const currentTime = audioPlayer.currentTime;
-        const currentLyric = lyricsArray[timingIndex];
-        
-        const minutes = Math.floor(currentTime / 60);
-        const seconds = currentTime % 60;
-        const timeStamp = `[${String(minutes).padStart(2, '0')}:${seconds.toFixed(2).padStart(5, '0')}]`;
-        
-        const newLRCLine = timeStamp + currentLyric;
-        lrcLines.push(newLRCLine);
-        
-        // リアルタイムでLRCテキストエリアを更新
-        outputLRCText.value += newLRCLine + '\n';
-        // テキストエリアの末尾にスクロール
-        outputLRCText.scrollTop = outputLRCText.scrollHeight;
-
-
-        timingIndex++;
-        updateLyricsDisplay();
+      if (u8[i]===0x89 && u8[i+1]===0x50 && u8[i+2]===0x4E && u8[i+3]===0x47) {
+        // PNG
+        res.picture = { mime: 'image/png', data: u8.slice(i, Math.min(i + 2097152, u8.length)) };
+        break;
       }
-      
-      // --- 4. ひとつ戻る (Undo) 機能 ---
-      
-      function updateOutputLRC() {
-          // LRCヘッダーとlrcLinesの内容を結合して、出力エリアを再構築
-          outputLRCText.value = generateLRCHeader() + lrcLines.join('\n') + (lrcLines.length > 0 ? '\n' : '');
-          outputLRCText.scrollTop = outputLRCText.scrollHeight;
-      }
+    }
+  } catch(e){ console.warn('WebM err', e); }
+  return res;
+}
 
-      function undoTiming() {
-        if (timingIndex > 0) {
-          if (confirm('最後のタイムスタンプを削除しますか？')) {
-              // 1. 内部データ (lrcLines) を戻す
-              lrcLines.pop();
-              
-              // 2. インデックスを戻す
-              timingIndex--;
-  
-              // 3. LRC出力エリアを更新 (再構築)
-              updateOutputLRC(); 
-              
-              // 4. 歌詞表示と進行状況を更新
-              updateLyricsDisplay();
-              
-              // 5. タップコントロールのメッセージをリセット
-              tapControl.textContent = 'TAP TO SYNC';
-          }
-        } else {
-          alert('記録されたタイムスタンプがありません。');
-        }
-      }
+// ═══════════════════════════════════════════════════════
+//  WAVEFORM
+// ═══════════════════════════════════════════════════════
+// ── Web Audio analyser ──────────────────────────────────
+let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
+// 静的バー用のランダム高さ（ファイル読み込み時に生成）
+let staticBars = [];
 
-      // --- 5. 特殊文字挿入機能 ---
-      
-      function insertCharacter(char) {
-        const textarea = inputLyrics; 
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const value = textarea.value;
+function buildStaticBars(W, H) {
+  const bars = Math.floor(W / 4);
+  staticBars = Array.from({ length: bars }, () => 0.08 + Math.random() * 0.55);
+}
 
-        // カーソル位置に文字を挿入
-        textarea.value = value.substring(0, start) + char + value.substring(end);
-        
-        // カーソルを挿入した文字の直後に移動
-        textarea.selectionStart = textarea.selectionEnd = start + char.length;
-        textarea.focus();
-      }
+function initAudioCtx() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;          // 128バー
+  analyser.smoothingTimeConstant = 0.8;
+  sourceNode = audioCtx.createMediaElementSource(audio);
+  sourceNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
 
+function drawWave() {
+  const W = wCanvas.offsetWidth || 256, H = 56;
+  if (wCanvas.width !== W) { wCanvas.width = W; wCanvas.height = H; }
 
-      // --- 6. UI更新とダウンロード/コピー処理 ---
+  wCtx.clearRect(0, 0, W, H);
 
-      function updateLyricsDisplay() {
-        const totalLines = lyricsArray.length;
-        
-        if (timingIndex < totalLines) {
-          progressStatus.textContent = `進行状況: ${timingIndex + 1}行目 / 全${totalLines}行`;
+  const barW = 3, gap = 1, step = barW + gap;
+  const bars = Math.floor(W / step);
 
-          currentLineDisplay.textContent = lyricsArray[timingIndex];
-          nextLinesDisplay.innerHTML = lyricsArray.slice(timingIndex + 1, timingIndex + 4).join('<br>');
-        } else {
-          progressStatus.textContent = `✅ 完了: 全${totalLines}行のタイミングを記録しました！`;
-          
-          currentLineDisplay.textContent = '全ての行が完了しました！';
-          nextLinesDisplay.textContent = '';
-          tapControl.textContent = '記録完了。LRCテキストエリアを確認してください。';
-        }
-      }
+  if (analyser && ST.isPlaying) {
+    // ── リアルタイム周波数バー ──────────────────────────
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
 
-      function resetTiming() {
-        if (confirm('タイムスタンプの記録をリセットしますか？')) {
-          timingIndex = 0;
-          lrcLines = [];
-          audioPlayer.currentTime = 0;
-          tapControl.textContent = 'TAP TO SYNC';
-          
-          // LRCテキストエリアをリセット (ヘッダーのみ残す)
-          outputLRCText.value = generateLRCHeader();
-          
-          updateLyricsDisplay();
-        }
-      }
+    // 周波数ビンをバー数に均等マッピング（低音域寄り）
+    const binCount = data.length;
+    for (let i = 0; i < bars; i++) {
+      // 低音域に集中させるlog的マッピング
+      const t   = i / bars;
+      const bin = Math.floor(Math.pow(t, 1.6) * (binCount - 1));
+      const val = data[bin] / 255;            // 0〜1
+      const h   = Math.max(2, val * H * 0.92);
+      const x   = i * step;
+      const y   = (H - h) / 2;
 
-      function sanitizeFilename(filename) {
-        return filename.replace(/[\\/:*?"<>|]/g, '_').trim();
-      }
+      const g = wCtx.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0,   `rgba(167,139,250,${0.5 + val * 0.5})`);
+      g.addColorStop(0.5, `rgba(129,115,250,${0.6 + val * 0.4})`);
+      g.addColorStop(1,   `rgba(96,165,250,${0.4 + val * 0.4})`);
+      wCtx.fillStyle = g;
+      wCtx.beginPath();
+      if (wCtx.roundRect) wCtx.roundRect(x, y, barW, h, 1.5);
+      else wCtx.rect(x, y, barW, h);
+      wCtx.fill();
+    }
+  } else {
+    // ── 静的バー（停止中・未ロード）──────────────────────
+    if (!staticBars.length) buildStaticBars(W, H);
+    const len = Math.min(bars, staticBars.length);
+    for (let i = 0; i < len; i++) {
+      const val = staticBars[i];
+      const h   = Math.max(2, val * H * 0.7);
+      const x   = i * step;
+      const y   = (H - h) / 2;
+      const g   = wCtx.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0, 'rgba(167,139,250,.28)');
+      g.addColorStop(1, 'rgba(96,165,250,.18)');
+      wCtx.fillStyle = g;
+      wCtx.beginPath();
+      if (wCtx.roundRect) wCtx.roundRect(x, y, barW, h, 1.5);
+      else wCtx.rect(x, y, barW, h);
+      wCtx.fill();
+    }
+  }
+}
 
-      // LRCテキストをコピーする関数
-      function copyLRC() {
-          outputLRCText.select();
-          try {
-              document.execCommand('copy');
-              alert('LRCテキストがクリップボードにコピーされました！');
-          } catch (err) {
-              alert('コピーに失敗しました。手動でテキストエリアの内容をコピーしてください。');
-          }
-      }
+function startViz() {
+  if (rafId) return;
+  function loop() { drawWave(); rafId = requestAnimationFrame(loop); }
+  loop();
+}
+function stopViz() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  drawWave(); // 静的バーで再描画
+}
 
-      // LRCファイルをダウンロードする関数 (GAS経由)
-      function downloadLRCFile() {
-        if (lrcLines.length === 0) {
-            alert('まだタイムスタンプが記録されていません。');
-            return;
-        }
-        
-        const data = {
-          title: sanitizeFilename(document.getElementById('input-title').value),
-          artist: sanitizeFilename(document.getElementById('input-artist').value),
-          lrcLines: lrcLines
-        };
-        
-        google.script.run
-          .withSuccessHandler(function(output) {
-            alert('LRCファイルがダウンロードされます。');
-          })
-          .withFailureHandler(function(error) {
-            alert('LRCファイルダウンロードに失敗しました: ' + error);
-          })
-          .generateLRC(data);
-      }
-      
-      // TXTファイルをダウンロードする関数
-      function downloadTXT() {
-        if (!inputLyrics.value.trim()) {
-            alert('歌詞を入力してください。');
-            return;
-        }
-        
-        const data = {
-          title: sanitizeFilename(document.getElementById('input-title').value),
-          rawLyrics: inputLyrics.value.trim()
-        };
+// 初回描画
+drawWave();
+window.addEventListener('resize', () => {
+  const W = wCanvas.offsetWidth || 256;
+  buildStaticBars(W, 56);
+  if (!ST.isPlaying) drawWave();
+});
 
-        google.script.run
-          .withSuccessHandler(function(output) {
-            alert('TXTファイルがダウンロードされます。');
-          })
-          .withFailureHandler(function(error) {
-            alert('TXT生成に失敗しました: ' + error);
-          })
-          .generateTXT(data);
-      }
-    </script>
-  </body>
+progWrap.addEventListener('click', e => {
+  if (!ST.loaded) return;
+  const r = progWrap.getBoundingClientRect();
+  audio.currentTime = ((e.clientX - r.left) / r.width) * ST.duration;
+});
+wCanvas.addEventListener('click', e => {
+  if (!ST.loaded) return;
+  const r = wCanvas.getBoundingClientRect();
+  audio.currentTime = ((e.clientX - r.left) / r.width) * ST.duration;
+});
+
+// ═══════════════════════════════════════════════════════
+//  PLAYBACK
+// ═══════════════════════════════════════════════════════
+document.getElementById('btn-play').addEventListener('click', togglePlay);
+document.getElementById('btn-back').addEventListener('click', () => audio.currentTime = Math.max(0, audio.currentTime - 5));
+document.getElementById('btn-fwd') .addEventListener('click', () => audio.currentTime = Math.min(ST.duration, audio.currentTime + 5));
+
+function togglePlay() {
+  if (!ST.loaded) { showToast('⚠ 先にMP3を読み込んでください'); return; }
+  ST.isPlaying ? audio.pause() : audio.play();
+}
+audio.addEventListener('play',  () => { ST.isPlaying = true;  icoPlay.style.display='none';  icoPause.style.display='block'; try { initAudioCtx(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch(e){} startViz(); });
+audio.addEventListener('pause', () => { ST.isPlaying = false; icoPlay.style.display='block'; icoPause.style.display='none'; stopViz(); });
+audio.addEventListener('ended', () => { ST.isPlaying = false; icoPlay.style.display='block'; icoPause.style.display='none'; stopViz(); });
+audio.addEventListener('timeupdate', () => {
+  const t = audio.currentTime;
+  tCur.textContent = fmtTime(t);
+  if (ST.duration) progBar.style.width = (t / ST.duration * 100) + '%';
+});
+
+// ═══════════════════════════════════════════════════════
+//  TAP / STAMP
+// ═══════════════════════════════════════════════════════
+function handleTap(e) {
+  if (e.type === 'mousedown' && e.button !== 0) return;
+  if (e.type === 'touchstart') e.preventDefault();
+  stamp();
+}
+
+function stamp() {
+  if (!ST.loaded)            { showToast('⚠ 先にMP3を読み込んでください'); return; }
+  if (!ST.isPlaying)         { showToast('▶ 再生中にタップ / Spaceを押してください'); return; }
+  if (ST.timingIndex >= ST.lyricsArray.length) { showToast('✓ 全行のタイミングが完了しています'); return; }
+
+  const t   = audio.currentTime;
+  const mm  = Math.floor(t / 60);
+  const sec = t % 60;
+  const ts  = `[${p2(mm)}:${sec.toFixed(2).padStart(5,'0')}]`;
+  const line = ST.lyricsArray[ST.timingIndex];
+  const lrcLine = ts + line;
+
+  ST.lrcLines.push(lrcLine);
+  ST.undoStack.push({ index: ST.timingIndex, line: lrcLine });
+  ST.timingIndex++;
+
+  btnUndo.disabled = false;
+  updateDisplay();
+  syncRawOut();
+  adjSelected = ST.timingIndex - 1;
+  renderAdjPanel();
+  setStatus(`${ts} — ${ST.timingIndex}行目`, 'ok');
+}
+
+// ═══════════════════════════════════════════════════════
+//  UNDO
+// ═══════════════════════════════════════════════════════
+btnUndo.addEventListener('click', undo);
+
+function undo() {
+  if (!ST.undoStack.length) { showToast('⚠ 戻せる操作がありません'); return; }
+  ST.undoStack.pop();
+  ST.lrcLines.pop();
+  ST.timingIndex--;
+  if (!ST.undoStack.length) btnUndo.disabled = true;
+  updateDisplay();
+  syncRawOut();
+  adjSelected = ST.timingIndex;
+  renderAdjPanel();
+  setStatus(`↩ ${ST.timingIndex + 1}行目を取り消し`, 'warn');
+}
+
+// ═══════════════════════════════════════════════════════
+//  LYRICS INPUT
+// ═══════════════════════════════════════════════════════
+lyricsIn.addEventListener('input', onLyricsChange);
+
+function onLyricsChange() {
+  const prevLines = ST.lyricsArray.slice(); // 編集前の行
+  refreshLyricsArray();
+  const newLines = ST.lyricsArray;
+
+  // ── タイムスタンプ済み行（timingIndex行目まで）が変化していないか確認 ──
+  // 打ち込み済み範囲内で内容が変わった行があればその行からリセット
+  let resetFrom = ST.timingIndex; // デフォルト：変化なし（リセット不要）
+  for (let i = 0; i < ST.timingIndex; i++) {
+    if (newLines[i] !== prevLines[i]) {
+      resetFrom = i;
+      break;
+    }
+  }
+
+  if (resetFrom < ST.timingIndex) {
+    // 打ち込み済み範囲の途中が変化 → その行以降をリセット
+    ST.lrcLines    = ST.lrcLines.slice(0, resetFrom);
+    ST.undoStack   = ST.undoStack.slice(0, resetFrom);
+    ST.timingIndex = resetFrom;
+    btnUndo.disabled = ST.undoStack.length === 0;
+    showToast(`⚠ ${resetFrom + 1}行目以降のタイムをリセットしました`);
+  }
+  // タイムスタンプ済み行より後ろの追記・編集はそのまま保持
+
+  updateDisplay();
+  syncRawOut();
+  renderAdjPanel();
+}
+
+// 歌詞配列だけ更新（タイミングには触らない）
+function refreshLyricsArray() {
+  ST.rawLyrics   = lyricsIn.value;
+  ST.lyricsArray = lyricsIn.value.split('\n').filter(l => l.trim() !== '');
+  lineBadge.textContent = ST.lyricsArray.length + ' lines';
+}
+
+// ═══════════════════════════════════════════════════════
+//  SPECIAL CHAR INSERT  (into lyrics textarea at cursor)
+// ═══════════════════════════════════════════════════════
+document.getElementById('char-btns').addEventListener('click', e => {
+  const btn = e.target.closest('.char-btn');
+  if (!btn) return;
+  const ch = btn.dataset.char;
+  const ta = lyricsIn;
+  const s = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, s) + ch + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = s + ch.length;
+  ta.focus();
+  // タイミングはリセットせず、配列と表示だけ更新
+  refreshLyricsArray();
+  updateDisplay();
+  syncRawOut();
+});
+
+// ═══════════════════════════════════════════════════════
+//  DISPLAY UPDATE
+// ═══════════════════════════════════════════════════════
+function updateDisplay() {
+  const total = ST.lyricsArray.length;
+  const idx   = ST.timingIndex;
+
+  // progress pill
+  if (total === 0) {
+    progressPill.textContent = '待機中';
+    progressPill.className   = '';
+  } else if (idx < total) {
+    progressPill.textContent = `${idx + 1} / ${total} 行目`;
+    progressPill.className   = 'active';
+  } else {
+    progressPill.textContent = `✓ 全 ${total} 行 完了`;
+    progressPill.className   = 'done';
+  }
+
+  // current line
+  if (idx < total) {
+    curLineDisp.textContent = ST.lyricsArray[idx];
+  } else if (total > 0) {
+    curLineDisp.textContent = '✓ 全行完了';
+  } else {
+    curLineDisp.textContent = 'タップして開始';
+  }
+
+  // next lines (upcoming)
+  nextDisp.innerHTML = '';
+  if (ST.rightView === 'live') {
+    // show already-stamped rows + upcoming
+    const stamped = ST.lrcLines.map((l, i) => {
+      const tsEnd = l.indexOf(']') + 1;
+      const ts  = l.slice(0, tsEnd);
+      const txt = l.slice(tsEnd);
+      const row = document.createElement('div');
+      row.className = 'lrc-done-row';
+      row.innerHTML = `<span class="lrc-ts">${ts}</span><span class="lrc-txt">${esc(txt)}</span>`;
+      row.style.animationDelay = '0s';
+      return row;
+    });
+    stamped.forEach(r => nextDisp.appendChild(r));
+
+    // upcoming (dim)
+    const upcomingStart = idx + 1;
+    ST.lyricsArray.slice(upcomingStart, upcomingStart + 5).forEach((line, i) => {
+      const row = document.createElement('div');
+      row.className = 'next-line-row';
+      row.innerHTML = `<span class="nl-num">${upcomingStart + i + 1}</span>${esc(line)}`;
+      nextDisp.appendChild(row);
+    });
+
+    // scroll stamped list to bottom
+    nextDisp.scrollTop = nextDisp.scrollHeight;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  RAW LRC TEXT SYNC
+// ═══════════════════════════════════════════════════════
+function getLRCHeader() {
+  const title  = san(inTitle.value)  || 'Untitled';
+  const artist = san(inArtist.value) || 'Unknown Artist';
+  return `[ti:${title}]\n[ar:${artist}]\n[al:Generated by LRC Studio]\n`;
+}
+
+function syncRawOut() {
+  lrcRawOut.value = getLRCHeader() + ST.lrcLines.join('\n') + (ST.lrcLines.length ? '\n' : '');
+  lrcRawOut.scrollTop = lrcRawOut.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOGGLE RIGHT VIEW
+// ═══════════════════════════════════════════════════════
+function toggleRightView() {
+  const btn = document.getElementById('btn-toggle-view');
+  if (ST.rightView === 'live') {
+    ST.rightView = 'raw';
+    livePane.style.display  = 'none';
+    lrcRawWrap.classList.add('on');
+    btn.textContent = 'タイミング表示';
+    document.getElementById('rpane-label').textContent = 'LRC テキスト';
+    syncRawOut();
+  } else {
+    ST.rightView = 'live';
+    livePane.style.display  = 'flex';
+    lrcRawWrap.classList.remove('on');
+    btn.textContent = 'LRC テキスト表示';
+    document.getElementById('rpane-label').textContent = 'タイミング';
+    updateDisplay();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  COPY LRC
+// ═══════════════════════════════════════════════════════
+function copyLRC() {
+  const text = getLRCHeader() + ST.lrcLines.join('\n');
+  if (!text.trim()) { showToast('⚠ コピーするLRCがありません'); return; }
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('✓ LRCをクリップボードにコピーしました');
+    setStatus('コピー完了', 'ok');
+  }).catch(() => {
+    // fallback
+    lrcRawOut.select();
+    document.execCommand('copy');
+    showToast('✓ コピーしました');
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  DOWNLOAD
+// ═══════════════════════════════════════════════════════
+function downloadLRCFile() {
+  if (!ST.lrcLines.length) { showToast('⚠ タイムスタンプがまだありません'); return; }
+  const title  = san(inTitle.value)  || 'Untitled';
+  const artist = san(inArtist.value) || 'Unknown Artist';
+  if (typeof google !== 'undefined' && google.script) {
+    google.script.run
+      .withSuccessHandler(() => setStatus('LRC ダウンロード完了', 'ok'))
+      .withFailureHandler(err => { console.warn(err); clientDL(getLRCHeader() + ST.lrcLines.join('\n'), title + '.lrc'); })
+      .generateLRC({ title, artist, lrcLines: ST.lrcLines });
+  } else {
+    clientDL(getLRCHeader() + ST.lrcLines.join('\n'), title + '.lrc');
+    setStatus('LRC 保存完了', 'ok');
+  }
+}
+
+function downloadTXT() {
+  const raw = lyricsIn.value.trim();
+  if (!raw) { showToast('⚠ 歌詞を入力してください'); return; }
+  const title = san(inTitle.value) || 'untitled';
+  if (typeof google !== 'undefined' && google.script) {
+    google.script.run
+      .withSuccessHandler(() => setStatus('TXT ダウンロード完了', 'ok'))
+      .withFailureHandler(err => { console.warn(err); clientDL(raw, title + '.txt'); })
+      .generateTXT({ title, rawLyrics: raw });
+  } else {
+    clientDL(raw, title + '.txt');
+    setStatus('TXT 保存完了', 'ok');
+  }
+}
+
+function clientDL(text, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 1000);
+  setStatus('保存完了', 'ok');
+}
+
+// ═══════════════════════════════════════════════════════
+//  RESET / CLEAR
+// ═══════════════════════════════════════════════════════
+function clearLyrics() {
+  lyricsIn.value = '';
+  onLyricsChange();
+}
+
+function clearTimestamps() {
+  ST.lrcLines    = [];
+  ST.undoStack   = [];
+  ST.timingIndex = 0;
+  btnUndo.disabled = true;
+  updateDisplay(); syncRawOut();
+  setStatus('タイムスタンプをクリア', 'warn');
+}
+
+function resetTiming() {
+  clearTimestamps();
+  audio.currentTime = 0;
+}
+
+function resetAll() {
+  clearLyrics();
+  inTitle.value = ''; inArtist.value = '';
+  document.getElementById('t-title').textContent  = '—';
+  document.getElementById('t-artist').textContent = 'unknown artist';
+  artImg.classList.remove('on'); artPh.style.display = 'flex';
+  artWrap.classList.remove('glow');
+  bgArt.classList.remove('visible'); bgArt.style.backgroundImage = '';
+  audio.pause(); audio.src = '';
+  ST.loaded = false; ST.isPlaying = false; ST.duration = 0;
+  icoPlay.style.display = 'block'; icoPause.style.display = 'none';
+  progBar.style.width = '0%'; tCur.textContent = '0:00'; tTot.textContent = '0:00';
+  uploadZone.classList.remove('loaded'); uploadLabel.textContent = 'MP3 / FLAC / M4A を読み込む';
+  progressPill.textContent = '待機中'; progressPill.className = '';
+  stopViz(); staticBars = []; drawWave(); setStatus('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement.tagName;
+  if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    ST.isPlaying ? stamp() : togglePlay();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    e.preventDefault();
+    undo();
+  }
+  if (e.code === 'ArrowLeft'  && !e.ctrlKey) { e.preventDefault(); audio.currentTime = Math.max(0, audio.currentTime - 5); }
+  if (e.code === 'ArrowRight' && !e.ctrlKey) { e.preventDefault(); audio.currentTime = Math.min(ST.duration, audio.currentTime + 5); }
+  // [ ] で選択行の微調整
+  if (e.key === '[' || e.key === '「') {
+    e.preventDefault();
+    if (adjSelected >= 0) nudgeTimestamp(adjSelected, -0.1);
+    else if (ST.lrcLines.length) { adjSelected = ST.lrcLines.length - 1; nudgeTimestamp(adjSelected, -0.1); }
+  }
+  if (e.key === ']' || e.key === '」') {
+    e.preventDefault();
+    if (adjSelected >= 0) nudgeTimestamp(adjSelected, 0.1);
+    else if (ST.lrcLines.length) { adjSelected = ST.lrcLines.length - 1; nudgeTimestamp(adjSelected, 0.1); }
+  }
+  // ↑↓ で選択行移動
+  if (e.code === 'ArrowUp') {
+    e.preventDefault();
+    if (adjSelected > 0) { adjSelected--; renderAdjPanel(); }
+  }
+  if (e.code === 'ArrowDown') {
+    e.preventDefault();
+    if (adjSelected < ST.lrcLines.length - 1) { adjSelected++; renderAdjPanel(); }
+    else if (adjSelected < 0 && ST.lrcLines.length) { adjSelected = 0; renderAdjPanel(); }
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
+function fmtTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2,'0');
+}
+function p2(n) { return String(n).padStart(2,'0'); }
+function san(s) {
+  return (s||'')
+    .replace(/[\/:*?"<>|]/g, '')   // ファイル名禁止文字を除去
+    .replace(/[^-]/g, '_') // 非ASCII（日本語等）をアンダースコアに
+    .replace(/\s+/g, '_')           // スペースをアンダースコアに
+    .replace(/_+/g, '_')            // 連続アンダースコアを1つに
+    .replace(/^_+|_+$/g, '')        // 先頭・末尾のアンダースコアを除去
+    .trim()
+    || 'untitled';
+}
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+ 
+function setStatus(msg, cls='') { statusEl.textContent = msg; statusEl.className = cls; }
+ 
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+ 
+// ═══════════════════════════════════════════════════════
+//  再生速度
+// ═══════════════════════════════════════════════════════
+document.getElementById('speed-row').addEventListener('click', e => {
+  const btn = e.target.closest('.spd-btn');
+  if (!btn) return;
+  const spd = parseFloat(btn.dataset.spd);
+  audio.playbackRate = spd;
+  document.querySelectorAll('.spd-btn').forEach(b => b.classList.toggle('active', b === btn));
+});
+ 
+// ═══════════════════════════════════════════════════════
+//  タイムスタンプ微調整 (±0.1秒)
+// ═══════════════════════════════════════════════════════
+let adjSelected = -1; // 選択中の行インデックス
+ 
+function renderAdjPanel() {
+  const container = document.getElementById('adj-rows');
+  container.innerHTML = '';
+  if (!ST.lrcLines.length) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:4px 0;">タイムスタンプなし</div>';
+    adjSelected = -1;
+    return;
+  }
+  ST.lrcLines.forEach((line, i) => {
+    const tsEnd = line.indexOf(']') + 1;
+    const ts  = line.slice(0, tsEnd);
+    const txt = line.slice(tsEnd);
+    const row = document.createElement('div');
+    row.className = 'adj-row';
+    row.dataset.i = i;
+    if (i === adjSelected) row.style.background = 'rgba(167,139,250,.1)';
+    row.innerHTML = `
+      <button class="adj-btn" data-i="${i}" data-d="-0.1">−</button>
+      <span class="adj-ts">${ts}</span>
+      <span class="adj-txt">${esc(txt)}</span>
+      <button class="adj-btn" data-i="${i}" data-d="0.1">＋</button>`;
+    row.addEventListener('click', () => { adjSelected = i; renderAdjPanel(); });
+    container.appendChild(row);
+  });
+}
+ 
+document.getElementById('adj-rows').addEventListener('click', e => {
+  const btn = e.target.closest('.adj-btn');
+  if (!btn) return;
+  e.stopPropagation();
+  const i = parseInt(btn.dataset.i);
+  const delta = parseFloat(btn.dataset.d);
+  nudgeTimestamp(i, delta);
+});
+ 
+function nudgeTimestamp(i, delta) {
+  const line = ST.lrcLines[i];
+  const tsEnd = line.indexOf(']') + 1;
+  const txt   = line.slice(tsEnd);
+  // parse [mm:ss.xx]
+  const m = line.match(/\[(\d+):(\d+\.\d+)\]/);
+  if (!m) return;
+  let secs = parseInt(m[1]) * 60 + parseFloat(m[2]);
+  secs = Math.max(0, secs + delta);
+  const mm  = Math.floor(secs / 60);
+  const rem = (secs % 60).toFixed(2).padStart(5, '0');
+  ST.lrcLines[i] = `[${p2(mm)}:${rem}]${txt}`;
+  // also update undoStack entry if it matches
+  if (ST.undoStack[i]) ST.undoStack[i].line = ST.lrcLines[i];
+  renderAdjPanel();
+  syncRawOut();
+  setStatus(`[${p2(mm)}:${rem}] 調整済み`, 'ok');
+}
+ 
+// ═══════════════════════════════════════════════════════
+//  .lrc ファイル読み込み
+// ═══════════════════════════════════════════════════════
+document.getElementById('lrc-file-input').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.split('\n');
+  const header = { title: '', artist: '' };
+  const timingLines = [];
+  const rawLines = [];
+ 
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const mHeader = trimmed.match(/^\[ti:(.+)\]$/i);
+    if (mHeader) { header.title = mHeader[1]; continue; }
+    const mArtist = trimmed.match(/^\[ar:(.+)\]$/i);
+    if (mArtist) { header.artist = mArtist[1]; continue; }
+    // skip other header-like tags [al: etc]
+    if (/^\[[a-z]{2}:.+\]$/i.test(trimmed) && !/^\[\d/.test(trimmed)) continue;
+    // timing line
+    if (/^\[\d+:\d+\.\d+\]/.test(trimmed)) {
+      timingLines.push(trimmed);
+      rawLines.push(trimmed.replace(/^\[\d+:\d+\.\d+\]/, ''));
+    }
+  }
+ 
+  if (!timingLines.length) { showToast('⚠ タイムスタンプが見つかりません'); return; }
+ 
+  // populate state
+  if (header.title)  { inTitle.value  = header.title;  document.getElementById('t-title').textContent  = header.title; }
+  if (header.artist) { inArtist.value = header.artist; document.getElementById('t-artist').textContent = header.artist; }
+ 
+  ST.lyricsArray  = rawLines;
+  ST.lrcLines     = timingLines;
+  ST.timingIndex  = timingLines.length;
+  ST.undoStack    = timingLines.map((l, i) => ({ index: i, line: l }));
+  ST.rawLyrics    = rawLines.join('\n');
+  btnUndo.disabled = false;
+ 
+  lyricsIn.value = rawLines.join('\n');
+  lineBadge.textContent = rawLines.length + ' lines';
+ 
+  updateDisplay();
+  syncRawOut();
+  renderAdjPanel();
+  showToast(`📄 ${file.name} を読み込みました`);
+  e.target.value = '';
+});
+ 
+ 
+// ═══════════════════════════════════════════════════════
+//  微調整パネルとの統合 (stamp/undo後に再描画)
+// ═══════════════════════════════════════════════════════
+// Wrap existing stamp to also re-render adj panel
+const _origStamp = stamp;
+window._stampOrig = stamp;
+</script>
+</body>
 </html>
