@@ -101,8 +101,36 @@
 
     /* ════ R2 SEARCH PANEL ════ */
     #r2-search-panel { margin: 0 22px 8px; flex-shrink: 0; }
-
-    /* Worker URL 設定 */
+    /* ── アップロードパネル ── */
+    #r2-upload-panel { margin: 0 22px 8px; flex-shrink: 0; }
+    #r2-upload-panel .sec-label { margin-bottom: 6px; }
+    #upload-drop-zone { border: 1.5px dashed var(--border); border-radius: 9px; padding: 18px 12px; text-align: center; color: var(--muted); font-size: 11px; cursor: pointer; transition: border-color .2s, background .2s, color .2s; }
+    #upload-drop-zone:hover, #upload-drop-zone.drag-over { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+    #upload-drop-zone svg { display: block; margin: 0 auto 6px; opacity: .5; }
+    #upload-queue { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow-y: auto; }
+    .uq-item { background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px; font-size: 11px; display: flex; align-items: center; gap: 8px; }
+    .uq-item .uq-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .uq-item .uq-bar-wrap { width: 60px; height: 4px; background: var(--border); border-radius: 2px; flex-shrink: 0; }
+    .uq-item .uq-bar { height: 100%; border-radius: 2px; background: var(--accent); width: 0%; transition: width .2s; }
+    .uq-item .uq-status { font-size: 10px; flex-shrink: 0; min-width: 28px; text-align: right; }
+    .uq-item.done .uq-status { color: var(--success); }
+    .uq-item.err  .uq-status { color: var(--warn); }
+    #btn-upload-start { width: 100%; margin-top: 6px; padding: 8px; border-radius: 8px; border: none; background: var(--accent); color: #fff; font-family: var(--sans); font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity .18s; display: none; }
+    #btn-upload-start:hover { opacity: .82; }
+    #btn-upload-start:disabled { opacity: .4; cursor: not-allowed; }
+    /* ── LRC未設定候補パネル ── */
+    #r2-nolrc-panel { margin: 0 22px 8px; flex-shrink: 0; display: none; }
+    #r2-nolrc-panel .sec-label { margin-bottom: 6px; }
+    #nolrc-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    #nolrc-header .sec-label { margin: 0; flex: 1; }
+    #btn-nolrc-refresh { padding: 5px 10px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: border-color .18s, color .18s; white-space: nowrap; flex-shrink: 0; }
+    #btn-nolrc-refresh:hover { border-color: var(--accent); color: var(--accent); }
+    #btn-nolrc-refresh:disabled { opacity: .4; cursor: not-allowed; }
+    #nolrc-results { display: flex; flex-direction: column; gap: 4px; }
+    /* ── インデックス再構築ボタン ── */
+    #btn-rebuild-index { width: 100%; margin-top: 6px; padding: 7px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-family: var(--sans); font-size: 11px; cursor: pointer; transition: border-color .18s, color .18s; display: none; }
+    #btn-rebuild-index:hover { border-color: var(--accent); color: var(--accent); }
+    #btn-rebuild-index:disabled { opacity: .4; cursor: not-allowed; }
     #r2-url-row { display: flex; gap: 5px; margin-bottom: 6px; align-items: center; }
     #cfg-worker-url {
       flex: 1; padding: 7px 10px; background: var(--surface);
@@ -228,8 +256,50 @@
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
     @keyframes fadeUp { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:translateY(0); } }
-    .lrc-done-row, .r2-result-item { animation: fadeUp .16s ease both; }
+    .r2-result-item { animation: fadeUp .16s ease both; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── タイミング付与アニメーション ── */
+    #fly-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; overflow: hidden; }
+    .fly-token {
+      position: absolute;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+      box-shadow: 0 0 12px rgba(167,139,250,.6);
+      z-index: 9999;
+    }
+    @keyframes flyToRight {
+      0%   { opacity: 1; transform: translate(0,0) scale(1); }
+      60%  { opacity: 1; transform: translate(var(--fly-dx), var(--fly-dy)) scale(0.95); }
+      100% { opacity: 0; transform: translate(var(--fly-dx), var(--fly-dy)) scale(0.85); }
+    }
+    @keyframes flyToLeft {
+      0%   { opacity: 1; transform: translate(0,0) scale(0.85); }
+      60%  { opacity: 1; transform: translate(var(--fly-dx), var(--fly-dy)) scale(0.95); }
+      100% { opacity: 0; transform: translate(var(--fly-dx), var(--fly-dy)) scale(1); }
+    }
+    /* 右ペインに追加される行のアニメーション */
+    .lrc-done-row.fly-in {
+      animation: lrcFlyIn .28s cubic-bezier(.22,.68,0,1.2) both;
+    }
+    @keyframes lrcFlyIn {
+      from { opacity: 0; transform: translateX(-18px) scaleX(0.92); }
+      to   { opacity: 1; transform: translateX(0) scaleX(1); }
+    }
+    /* Undo時に消える行 */
+    @keyframes lrcFlyOut {
+      from { opacity: 1; transform: translateX(0) scaleX(1); }
+      to   { opacity: 0; transform: translateX(-24px) scaleX(0.88); }
+    }
     .spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.2); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
   </style>
 </head>
@@ -352,6 +422,39 @@
       </div>
       <div id="r2-status"></div>
       <div id="r2-results"></div>
+      <!-- インデックス更新ボタン（接続後に表示） -->
+      <button id="btn-update-index" onclick="rebuildIndex()" style="display:none;width:100%;margin-top:5px;padding:7px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:var(--sans);font-size:11px;cursor:pointer;transition:border-color .18s,color .18s;"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+        🔄 music_index.json を更新
+      </button>
+    </div>
+
+    <!-- ══ LRC 未設定候補 ══ -->
+    <div id="r2-nolrc-panel">
+      <div id="nolrc-header">
+        <div class="sec-label">🎵 LRC未設定の曲</div>
+        <button id="btn-nolrc-refresh" onclick="refreshNolrcList()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+          別の候補
+        </button>
+      </div>
+      <div id="nolrc-results"></div>
+    </div>
+
+    <!-- ══ R2 アップロード ══ -->
+    <div id="r2-upload-panel" style="display:none;">
+      <div class="sec-label">☁ R2 へアップロード</div>
+      <div id="upload-drop-zone" onclick="document.getElementById('r2-file-input').click()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        MP3 / FLAC / M4A をドロップ<br>またはクリックして選択
+      </div>
+      <input type="file" id="r2-file-input" accept="audio/*,.mp3,.flac,.m4a,.aac,.ogg" multiple style="display:none">
+      <div id="upload-queue"></div>
+      <button id="btn-upload-start" onclick="startR2Upload()">▲ アップロード開始</button>
+      <button id="btn-rebuild-index" onclick="rebuildIndex()">
+        🔄 R2全ファイルをスキャンしてインデックス更新
+      </button>
     </div>
 
     <!-- ローカルファイル -->
@@ -405,6 +508,8 @@
     </div>
     <div id="bottom">
       <button class="a-btn pri"      onclick="downloadLRCFile()">LRC ダウンロード</button>
+      <button class="a-btn pri" id="btn-upload-lrc" onclick="uploadLRCToR2()" style="display:none">☁ LRC を R2 へ</button>
+      <button class="a-btn sec"      onclick="simulateLRC()" id="btn-simulate">▶ シミュレーション</button>
       <button class="a-btn sec"      onclick="downloadTXT()">TXT ダウンロード</button>
       <button class="a-btn warn-btn" onclick="resetTiming()">タイムリセット</button>
       <button class="a-btn dng"      onclick="resetAll()">全リセット</button>
@@ -413,14 +518,15 @@
   </div>
 </div>
 <div id="toast"></div>
+<div id="fly-overlay"></div>
 
 <script>
 // ═══════════════════════════════════════════════════════
 //  ★ WORKER URL PLACEHOLDER ★
 //  wrangler deploy 後に表示される URL をここに貼り付ける
-//  例: "https://lrc-studio-r2-proxy.username.workers.dev"
+//
 // ═══════════════════════════════════════════════════════
-const DEFAULT_WORKER_URL = "https://lrc-studio-r2-proxy.miuranosuketatsuya06.workers.dev";
+const DEFAULT_WORKER_URL = "";
 // ═══════════════════════════════════════════════════════
 
 // ─────────────────────────────────────────────────────
@@ -430,6 +536,7 @@ const ST = {
   lyricsArray: [], timingIndex: 0, lrcLines: [], undoStack: [],
   audioFile: null, rawLyrics: '', isPlaying: false, duration: 0, loaded: false,
   rightView: 'live',
+  r2ItemPath: null,  // 現在読み込んでいるR2音源のパス
 };
 
 // ─────────────────────────────────────────────────────
@@ -447,6 +554,18 @@ let r2SearchDebounce = null;
   } catch(e) { R2_WORKER = DEFAULT_WORKER_URL; }
   const el = document.getElementById('cfg-worker-url');
   if (el) el.value = R2_WORKER;
+  // URLが設定済みならアップロードパネルも表示
+  if (R2_WORKER && !R2_WORKER.includes('YOUR_WORKER')) {
+    const up = document.getElementById('r2-upload-panel');
+    if (up) up.style.display = '';
+    const rb = document.getElementById('btn-rebuild-index');
+    if (rb) rb.style.display = '';
+    const ui = document.getElementById('btn-update-index');
+    if (ui) ui.style.display = '';
+    const ul = document.getElementById('btn-upload-lrc');
+    if (ul && ST.lrcLines && ST.lrcLines.length) ul.style.display = '';
+    // ※ nolrcパネルはconnectR2()成功後に表示（インデックス取得後）
+  }
 })();
 
 // ── 接続ボタン ──────────────────────────────────────
@@ -463,6 +582,13 @@ async function connectR2() {
   if (idx) {
     setR2Status(`✓ ${idx.length} 曲読み込み完了`, 'ok');
     showToast(`✓ R2 接続成功 — ${idx.length} 曲`);
+    // パネルを表示
+    document.getElementById('r2-upload-panel').style.display = '';
+    document.getElementById('btn-rebuild-index').style.display = '';
+    document.getElementById('btn-update-index').style.display = '';
+    // LRCがあればアップロードボタンも表示
+    if (ST.lrcLines && ST.lrcLines.length) document.getElementById('btn-upload-lrc').style.display = '';
+    showNolrcPanel();
   }
 }
 
@@ -627,6 +753,7 @@ async function loadFromR2(item, btnEl) {
     progBar.style.width   = '0%';
     tCur.textContent      = '0:00';
 
+    ST.r2ItemPath = item.path;  // LRCアップロード先の特定に使用
     const title  = item.title  || item.path.replace(/.*\//, '').replace(/\.[^.]+$/, '');
     const artist = item.artist || 'Unknown Artist';
     inTitle.value  = title; inArtist.value = artist;
@@ -666,6 +793,637 @@ async function loadFromR2(item, btnEl) {
     btnEl.classList.remove('loading');
     btnEl.textContent = '読み込む';
   }
+}
+
+// ── R2 アップロード機能 ──────────────────────────────────────────
+let uploadQueue = []; // { file, path, status, progress }
+
+// ドロップゾーンのドラッグイベント
+(function() {
+  const dz = document.getElementById('upload-drop-zone');
+  if (!dz) return;
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    addFilesToQueue([...e.dataTransfer.files]);
+  });
+  document.getElementById('r2-file-input').addEventListener('change', e => {
+    addFilesToQueue([...e.target.files]);
+    e.target.value = '';
+  });
+})();
+
+function addFilesToQueue(files) {
+  const audio_exts = /\.(mp3|flac|m4a|aac|ogg|wav)$/i;
+  files.filter(f => audio_exts.test(f.name)).forEach(file => {
+    // R2 のパス = ファイル名そのまま（先頭スラッシュ付き）
+    uploadQueue.push({ file, path: '/' + file.name, status: 'pending', progress: 0 });
+  });
+  renderUploadQueue();
+  const btn = document.getElementById('btn-upload-start');
+  btn.style.display = uploadQueue.some(i => i.status === 'pending') ? '' : 'none';
+}
+
+function renderUploadQueue() {
+  const c = document.getElementById('upload-queue');
+  c.innerHTML = '';
+  uploadQueue.forEach((item, idx) => {
+    const div = document.createElement('div');
+    div.className = 'uq-item' + (item.status === 'done' ? ' done' : item.status === 'err' ? ' err' : '');
+    div.innerHTML = `
+      <span class="uq-name" title="${esc(item.file.name)}">${esc(item.file.name)}</span>
+      <div class="uq-bar-wrap"><div class="uq-bar" id="uq-bar-${idx}" style="width:${item.progress}%"></div></div>
+      <span class="uq-status" id="uq-status-${idx}">${
+        item.status === 'done' ? '✓' :
+        item.status === 'err'  ? '✗' :
+        item.status === 'uploading' ? `${item.progress}%` : '待機'
+      }</span>`;
+    c.appendChild(div);
+  });
+}
+
+async function startR2Upload() {
+  if (!R2_WORKER || R2_WORKER.includes('YOUR_WORKER')) {
+    showToast('⚠ 先にR2に接続してください'); return;
+  }
+  const btn = document.getElementById('btn-upload-start');
+  btn.disabled = true;
+  btn.textContent = 'アップロード中…';
+
+  for (let i = 0; i < uploadQueue.length; i++) {
+    const item = uploadQueue[i];
+    if (item.status !== 'pending') continue;
+    item.status = 'uploading';
+    renderUploadQueue();
+
+    try {
+      await uploadFileToR2(item, i);
+      item.status = 'done'; item.progress = 100;
+    } catch(e) {
+      item.status = 'err';
+      console.error('Upload failed:', item.file.name, e);
+    }
+    renderUploadQueue();
+  }
+
+  // 全完了したらインデックス再取得を促す
+  const doneCount = uploadQueue.filter(i => i.status === 'done').length;
+  if (doneCount > 0) {
+    showToast(`✓ ${doneCount} 件アップロード完了 — 接続ボタンで再読み込み`);
+    // music_index.json を自動更新（既存エントリに追記）
+    await refreshIndexAfterUpload();
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▲ アップロード開始';
+  // 完了済みをキューから除去
+  uploadQueue = uploadQueue.filter(i => i.status !== 'done');
+  renderUploadQueue();
+  if (!uploadQueue.some(i => i.status === 'pending')) btn.style.display = 'none';
+}
+
+async function uploadFileToR2(item, idx) {
+  // XHR でアップロード進捗を取得
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const url = `${R2_WORKER}/upload?path=${encodeURIComponent(item.path)}`;
+    xhr.open('PUT', url);
+
+    const ext = item.file.name.split('.').pop().toLowerCase();
+    const mimeMap = { mp3:'audio/mpeg', flac:'audio/flac', m4a:'audio/mp4', aac:'audio/aac', ogg:'audio/ogg', wav:'audio/wav' };
+    xhr.setRequestHeader('Content-Type', mimeMap[ext] || 'audio/mpeg');
+
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        item.progress = Math.round(e.loaded / e.total * 100);
+        const bar = document.getElementById(`uq-bar-${idx}`);
+        const stat = document.getElementById(`uq-status-${idx}`);
+        if (bar) bar.style.width = item.progress + '%';
+        if (stat) stat.textContent = item.progress + '%';
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText}`));
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.send(item.file);
+  });
+}
+
+async function refreshIndexAfterUpload() {
+  // 現在の music_index.json を取得し、新規ファイルのエントリを追加して書き戻す
+  try {
+    const res = await fetch(`${R2_WORKER}/music_index.json`);
+    let index = res.ok ? await res.json() : [];
+    if (!Array.isArray(index)) index = [];
+
+    const existingPaths = new Set(index.map(e => e.path));
+
+    for (const item of uploadQueue.filter(i => i.status === 'done')) {
+      if (existingPaths.has(item.path)) continue;
+      // ID3タグを読んでタイトル・アーティストを取得
+      let title = item.file.name.replace(/\.[^.]+$/, '');
+      let artist = 'Unknown Artist';
+      try {
+        const buf = await item.file.arrayBuffer();
+        const tags = await parseTags(buf);
+        if (tags.title)  title  = tags.title;
+        if (tags.artist) artist = tags.artist;
+      } catch(e) {}
+
+      index.push({
+        path: item.path,
+        title,
+        artist,
+        lrc: item.path.replace(/\.[^.]+$/, '.lrc')
+      });
+    }
+
+    await fetch(`${R2_WORKER}/update_index`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(index)
+    });
+    // ローカルキャッシュも更新
+    r2Index = index;
+  } catch(e) {
+    console.warn('Index update failed:', e.message);
+  }
+}
+
+// ── LRC未設定候補パネル ─────────────────────────────────────────
+const NOLRC_SHOW = 5; // 一度に表示する件数
+let nolrcPool = [];   // LRC未設定曲の全リスト
+
+async function showNolrcPanel() {
+  const panel = document.getElementById('r2-nolrc-panel');
+  if (!panel) return;
+
+  const index = r2Index || await fetchR2Index();
+  if (!index || !index.length) return;
+
+  panel.style.display = '';
+
+  const c = document.getElementById('nolrc-results');
+  if (c) c.innerHTML = '<div style="font-size:11px;color:var(--muted);text-align:center;padding:8px">確認中…</div>';
+
+  // R2に実在するLRCファイル一覧を取得（1リクエスト）
+  let existingLrcs = new Set();
+  try {
+    const res = await fetch(`${R2_WORKER}/list?type=lrc`);
+    if (res.ok) {
+      const lrcPaths = await res.json(); // ["/foo.lrc", "/bar.lrc", ...]
+      existingLrcs = new Set(lrcPaths);
+    }
+  } catch(e) {
+    console.warn('LRC list fetch failed:', e.message);
+  }
+
+  // インデックス内の曲で、R2にLRCが実在しないものを候補に
+  nolrcPool = index.filter(item => {
+    const lrcPath = item.lrc || item.path?.replace(/\.[^.]+$/, '.lrc');
+    return !lrcPath || !existingLrcs.has(lrcPath);
+  });
+
+  if (!nolrcPool.length) {
+    // 全曲LRCがある場合は全曲を候補にする
+    nolrcPool = index.slice();
+  }
+
+  renderNolrcList();
+}
+
+function renderNolrcList() {
+  const container = document.getElementById('nolrc-results');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!nolrcPool.length) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--muted);text-align:center;padding:8px">LRC未設定の曲はありません</div>';
+    return;
+  }
+
+  // ランダムにNOLRC_SHOW件選ぶ
+  const shuffled = [...nolrcPool].sort(() => Math.random() - 0.5);
+  const picks = shuffled.slice(0, NOLRC_SHOW);
+
+  picks.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'r2-result-item';
+    row.style.animationDelay = (i * 0.04) + 's';
+
+    const title  = esc(item.title  || item.path?.replace(/.*\//, '').replace(/\.[^.]+$/, '') || '—');
+    const artist = esc(item.artist || 'Unknown Artist');
+
+    row.innerHTML = `
+      <div class="r2-thumb">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.4"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
+      </div>
+      <div class="r2-info">
+        <div class="r2-title">${title}</div>
+        <div class="r2-artist">${artist}</div>
+      </div>
+      <button class="r2-load-btn">読み込む</button>`;
+
+    const loadBtn = row.querySelector('.r2-load-btn');
+    loadBtn.addEventListener('click', e => { e.stopPropagation(); loadFromR2(item, loadBtn); });
+    row.addEventListener('click', () => loadFromR2(item, loadBtn));
+
+    // サムネイルも非同期取得
+    if (item.path) {
+      const thumb = row.querySelector('.r2-thumb');
+      extractR2Cover(r2Url(item.path)).then(url => {
+        if (!url) return;
+        thumb.innerHTML = `<img src="${url}" alt="" onerror="this.style.display='none'">`;
+      });
+    }
+
+    container.appendChild(row);
+  });
+}
+
+function refreshNolrcList() {
+  const btn = document.getElementById('btn-nolrc-refresh');
+  if (btn) { btn.disabled = true; }
+  renderNolrcList();
+  if (btn) { setTimeout(() => btn.disabled = false, 500); }
+}
+
+// ── R2全ファイルスキャン＆インデックス再構築 ────────────────────
+async function rebuildIndex() {
+  if (!R2_WORKER || R2_WORKER.includes('YOUR_WORKER')) {
+    showToast('⚠ 先にR2に接続してください'); return;
+  }
+  const btn = document.getElementById('btn-rebuild-index');
+  btn.disabled = true;
+  btn.textContent = '🔄 スキャン中…';
+
+  try {
+    // 1. R2内の全音声ファイル一覧を取得
+    const listRes = await fetch(`${R2_WORKER}/list`);
+    if (!listRes.ok) throw new Error(`list: HTTP ${listRes.status}`);
+    const allFiles = await listRes.json(); // [{ path, size }, ...]
+
+    // 2. 現在のインデックスを取得
+    const idxRes = await fetch(`${R2_WORKER}/music_index.json`);
+    let index = idxRes.ok ? await idxRes.json() : [];
+    if (!Array.isArray(index)) index = [];
+
+    const existingPaths = new Set(index.map(e => e.path));
+
+    // 3. インデックスにない音声ファイルを追加
+    const newEntries = [];
+    let scanned = 0;
+
+    for (const file of allFiles) {
+      if (existingPaths.has(file.path)) continue;
+
+      scanned++;
+      btn.textContent = `🔄 スキャン中… (${scanned}件処理中)`;
+
+      let title  = file.path.replace(/.*\//, '').replace(/\.[^.]+$/, '');
+      let artist = 'Unknown Artist';
+
+      // ID3タグをR2から取得
+      try {
+        const tags = await extractR2Tags(r2Url(file.path));
+        if (tags.title)  title  = tags.title;
+        if (tags.artist) artist = tags.artist;
+      } catch(e) { /* タグ取得失敗は無視 */ }
+
+      newEntries.push({
+        path: file.path,
+        title,
+        artist,
+        lrc: file.path.replace(/\.[^.]+$/, '.lrc')
+      });
+    }
+
+    if (newEntries.length === 0) {
+      showToast('✓ 新規ファイルなし（インデックスは最新です）');
+      btn.disabled = false;
+      btn.textContent = '🔄 R2全ファイルをスキャンしてインデックス更新';
+      return;
+    }
+
+    // 4. インデックスに追記して保存
+    const newIndex = [...index, ...newEntries];
+    btn.textContent = `🔄 インデックス書き込み中…`;
+
+    const saveRes = await fetch(`${R2_WORKER}/update_index`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newIndex)
+    });
+    if (!saveRes.ok) throw new Error(`update_index: HTTP ${saveRes.status}`);
+
+    // 5. ローカルキャッシュ更新
+    r2Index = newIndex;
+    nolrcPool = newIndex.filter(item => !item.lrc || item.lrc === '');
+    if (!nolrcPool.length) nolrcPool = newIndex.slice();
+    renderNolrcList();
+
+    showToast(`✓ ${newEntries.length} 件追加 (計 ${newIndex.length} 曲)`);
+    setR2Status(`✓ ${newIndex.length} 曲 (+${newEntries.length} 追加)`, 'ok');
+
+  } catch(e) {
+    showToast('⚠ インデックス更新失敗: ' + e.message);
+    console.error('rebuildIndex error:', e);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔄 R2全ファイルをスキャンしてインデックス更新';
+}
+
+// R2 mp3からID3タグのみ取得（画像なし、高速）
+async function extractR2Tags(mp3Url) {
+  const res = await fetch(mp3Url, { headers: { 'Range': 'bytes=0-65535' } });
+  if (!res.ok && res.status !== 206) return {};
+  const buf = await res.arrayBuffer();
+  return await parseTags(buf);
+}
+
+// ── LRC を R2 へアップロード ──────────────────────────────────────
+async function uploadLRCToR2() {
+  if (!R2_WORKER || R2_WORKER.includes('YOUR_WORKER')) {
+    showToast('⚠ 先にR2に接続してください'); return;
+  }
+  if (!ST.lrcLines.length) {
+    showToast('⚠ タイムスタンプがありません'); return;
+  }
+
+  // 保存先パス: 現在読み込んでいる音源のパスから .lrc に変換
+  // R2から読み込んだ場合はitem.pathがある、ローカルの場合はタイトルから生成
+  let lrcPath = '';
+  if (ST.r2ItemPath) {
+    lrcPath = ST.r2ItemPath.replace(/\.[^.]+$/, '.lrc');
+  } else {
+    const t = san(inTitle.value) || 'untitled';
+    lrcPath = '/' + t + '.lrc';
+  }
+
+  const lrcText = getLRCHeader() + ST.lrcLines.join('\n') + '\n';
+  const btn = document.getElementById('btn-upload-lrc');
+  btn.disabled = true;
+  btn.textContent = '☁ 保存中…';
+
+  try {
+    const res = await fetch(`${R2_WORKER}/upload?path=${encodeURIComponent(lrcPath)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      body: lrcText
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    showToast(`✓ R2 に保存しました: ${lrcPath}`);
+    setStatus('R2 保存完了', 'ok');
+
+    // インデックスの lrc フィールドを更新
+    if (r2Index && ST.r2ItemPath) {
+      const entry = r2Index.find(e => e.path === ST.r2ItemPath);
+      if (entry) {
+        entry.lrc = lrcPath;
+        await fetch(`${R2_WORKER}/update_index`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(r2Index)
+        });
+      }
+    }
+  } catch(e) {
+    showToast('⚠ 保存失敗: ' + e.message);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '☁ LRC を R2 へ';
+}
+
+// ── シミュレーション再生 ────────────────────────────────────────
+let simRaf = null;
+let simActive = false;
+
+function simulateLRC() {
+  if (!ST.lrcLines.length) { showToast('⚠ タイムスタンプがありません'); return; }
+  if (!ST.loaded) { showToast('⚠ 先に音源を読み込んでください'); return; }
+
+  const btn = document.getElementById('btn-simulate');
+
+  if (simActive) {
+    // 停止
+    stopSimulation();
+    btn.textContent = '▶ シミュレーション';
+    return;
+  }
+
+  // lrc-raw-wrap ビューに切り替えて専用シミュレーション表示を出す
+  simActive = true;
+  btn.textContent = '⏹ シミュレーション停止';
+
+  // シミュレーション用ビューを構築
+  const wrap = document.getElementById('lrc-raw-wrap');
+  const livePane = document.getElementById('lyrics-display-pane');
+  wrap.classList.add('on');
+  livePane.style.display = 'none';
+  document.getElementById('rpane-label').textContent = 'シミュレーション';
+
+  // lrc-raw-out を使って行表示
+  const out = document.getElementById('lrc-raw-out');
+  out.style.display = 'none'; // textarea は非表示
+
+  // シミュレーション用divを作成
+  let simDiv = document.getElementById('sim-display');
+  if (!simDiv) {
+    simDiv = document.createElement('div');
+    simDiv.id = 'sim-display';
+    simDiv.style.cssText = 'flex:1;overflow-y:auto;padding:16px 20px;font-family:var(--mono);font-size:13px;line-height:2.0;scroll-behavior:smooth;';
+    wrap.appendChild(simDiv);
+  }
+  simDiv.style.display = '';
+
+  // 行データを解析
+  const parsed = ST.lrcLines.map(line => {
+    const m = line.match(/^\[(\d+):(\d+\.\d+)\](.*)/);
+    if (!m) return null;
+    return { time: parseInt(m[1]) * 60 + parseFloat(m[2]), text: m[3] };
+  }).filter(Boolean);
+
+  // 各行をdivで表示
+  simDiv.innerHTML = parsed.map((p, i) =>
+    `<div id="sim-line-${i}" style="transition:color .2s,font-weight .2s,transform .15s;padding:2px 0;color:var(--muted)">${p.text || '♪'}</div>`
+  ).join('');
+
+  let lastIdx = -1;
+
+  function tick() {
+    if (!simActive) return;
+    const t = audio.currentTime;
+
+    // 現在時刻に対応する行を探す
+    let idx = -1;
+    for (let i = parsed.length - 1; i >= 0; i--) {
+      if (t >= parsed[i].time) { idx = i; break; }
+    }
+
+    if (idx !== lastIdx) {
+      // 前の行を戻す
+      if (lastIdx >= 0) {
+        const prev = document.getElementById(`sim-line-${lastIdx}`);
+        if (prev) { prev.style.color = 'var(--muted)'; prev.style.fontWeight = ''; prev.style.transform = ''; }
+      }
+      // 現在行をハイライト
+      if (idx >= 0) {
+        const cur = document.getElementById(`sim-line-${idx}`);
+        if (cur) {
+          cur.style.color = 'var(--accent)';
+          cur.style.fontWeight = '700';
+          cur.style.transform = 'translateX(4px)';
+          cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      }
+      lastIdx = idx;
+    }
+    simRaf = requestAnimationFrame(tick);
+  }
+
+  // 音源が停止中なら再生開始
+  if (!ST.isPlaying) audio.play().catch(() => {});
+  simRaf = requestAnimationFrame(tick);
+
+  // 音源終了で停止
+  audio.addEventListener('ended', stopSimulation, { once: true });
+}
+
+function stopSimulation() {
+  simActive = false;
+  if (simRaf) { cancelAnimationFrame(simRaf); simRaf = null; }
+  const btn = document.getElementById('btn-simulate');
+  if (btn) btn.textContent = '▶ シミュレーション';
+  // simDivを隠してtextareaを戻す
+  const simDiv = document.getElementById('sim-display');
+  if (simDiv) simDiv.style.display = 'none';
+  const out = document.getElementById('lrc-raw-out');
+  if (out) out.style.display = '';
+}
+
+// ── タイミング付与アニメーション ─────────────────────────────────
+
+// 左ペインの現在行の位置を取得してトークンを飛ばす
+function flyLineToRight(lineText, ts) {
+  const lyricsEl = document.getElementById('lyrics-in');
+  const nextDispEl = document.getElementById('next-lines-display');
+  if (!lyricsEl || !nextDispEl) { updateDisplay(); return; }
+
+  // 左ペインの現在行のおおよそのY位置を計算
+  const lRect = lyricsEl.getBoundingClientRect();
+  const lineH = parseFloat(getComputedStyle(lyricsEl).lineHeight) || 24;
+  const paddingTop = 18;
+  const lines = lyricsEl.value.split('\n');
+  // timingIndexは既にインクリメント済みなのでST.timingIndex-1が今の行
+  const lineIdx = ST.timingIndex - 1;
+  const scrolledLines = Math.floor(lyricsEl.scrollTop / lineH);
+  const visibleLineIdx = lineIdx - scrolledLines;
+  const startY = lRect.top + paddingTop + visibleLineIdx * lineH + lineH / 2;
+  const startX = lRect.left + 20;
+
+  // 右ペインの着地点（nextDisp下端）
+  const rRect = nextDispEl.getBoundingClientRect();
+  const endX = rRect.left + 20;
+  const endY = rRect.bottom - 20;
+
+  const overlay = document.getElementById('fly-overlay');
+  if (!overlay) { updateDisplay(); return; }
+
+  // トークンdivを作成
+  const token = document.createElement('div');
+  token.className = 'fly-token';
+  token.textContent = lineText.length > 28 ? lineText.slice(0,28)+'…' : lineText;
+  token.style.left = startX + 'px';
+  token.style.top  = startY + 'px';
+
+  const dx = endX - startX;
+  const dy = endY - startY;
+  token.style.setProperty('--fly-dx', dx + 'px');
+  token.style.setProperty('--fly-dy', dy + 'px');
+  token.style.animation = 'flyToRight .32s cubic-bezier(.4,0,.2,1) forwards';
+
+  overlay.appendChild(token);
+
+  // アニメーション終了後にupdateDisplay + トークン除去
+  token.addEventListener('animationend', () => {
+    overlay.removeChild(token);
+    updateDisplay();
+    // 最後に追加された行にfly-inクラスを付けてスライドイン
+    const rows = document.querySelectorAll('#next-lines-display .lrc-done-row');
+    if (rows.length) {
+      const last = rows[rows.length - 1];
+      last.classList.add('fly-in');
+      last.addEventListener('animationend', () => last.classList.remove('fly-in'), {once:true});
+    }
+  }, {once:true});
+}
+
+// 右ペイン最後の行をアニメーションで左に飛ばす（Undo時）
+function flyLastRowToLeft(callback) {
+  const rows = document.querySelectorAll('#next-lines-display .lrc-done-row');
+  if (!rows.length) { callback(); return; }
+
+  const lastRow = rows[rows.length - 1];
+  const lyricsEl = document.getElementById('lyrics-in');
+  const rRect = lastRow.getBoundingClientRect();
+  const lRect = lyricsEl ? lyricsEl.getBoundingClientRect() : {left:0, top:rRect.top};
+
+  // オーバーレイにコピーを出して元rowを隠す
+  const overlay = document.getElementById('fly-overlay');
+  if (!overlay) { callback(); return; }
+
+  const txt = lastRow.querySelector('.lrc-txt');
+  const token = document.createElement('div');
+  token.className = 'fly-token';
+  token.style.background = 'rgba(248,113,113,.85)';
+  token.style.boxShadow = '0 0 12px rgba(248,113,113,.5)';
+  token.textContent = txt ? (txt.textContent.length > 28 ? txt.textContent.slice(0,28)+'…' : txt.textContent) : '…';
+  token.style.left = rRect.left + 'px';
+  token.style.top  = rRect.top  + 'px';
+
+  const lineH = lyricsEl ? (parseFloat(getComputedStyle(lyricsEl).lineHeight)||24) : 24;
+  const dx = lRect.left + 20 - rRect.left;
+  const dy = lRect.top + 18 + (ST.timingIndex - 1) * lineH - lRect.top - lyricsEl.scrollTop - rRect.top;
+  token.style.setProperty('--fly-dx', dx + 'px');
+  token.style.setProperty('--fly-dy', dy + 'px');
+  token.style.animation = 'flyToLeft .32s cubic-bezier(.4,0,.2,1) forwards';
+
+  // 元の行をアニメーションで消す
+  lastRow.style.animation = 'lrcFlyOut .2s ease forwards';
+
+  overlay.appendChild(token);
+  token.addEventListener('animationend', () => {
+    overlay.removeChild(token);
+    callback();
+  }, {once:true});
+}
+
+// 左ペインを現在のタイミング行までスクロール
+function scrollLyricsToCurrentLine() {
+  const lyricsEl = document.getElementById('lyrics-in');
+  if (!lyricsEl) return;
+  const lineH = parseFloat(getComputedStyle(lyricsEl).lineHeight) || 24;
+  const paddingTop = 18;
+  const targetScrollTop = Math.max(0, (ST.timingIndex - 2) * lineH);
+  // スムーズスクロール
+  const start = lyricsEl.scrollTop;
+  const diff = targetScrollTop - start;
+  if (Math.abs(diff) < 2) return;
+  const duration = 180;
+  const startTime = performance.now();
+  function easeScroll(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    lyricsEl.scrollTop = start + diff * ease;
+    if (progress < 1) requestAnimationFrame(easeScroll);
+  }
+  requestAnimationFrame(easeScroll);
 }
 
 function setR2Status(msg, cls) {
@@ -843,24 +1601,41 @@ function stamp(){
   if(ST.timingIndex>=ST.lyricsArray.length){showToast('✓ 全行のタイミングが完了しています');return;}
   const t=audio.currentTime;const mm=Math.floor(t/60);const sec=t%60;
   const ts=`[${p2(mm)}:${sec.toFixed(2).padStart(5,'0')}]`;
-  const lrcLine=ts+ST.lyricsArray[ST.timingIndex];
+  const currentLine = ST.lyricsArray[ST.timingIndex];
+  const lrcLine=ts+currentLine;
   ST.lrcLines.push(lrcLine);ST.undoStack.push({index:ST.timingIndex,line:lrcLine});ST.timingIndex++;
-  btnUndo.disabled=false;updateDisplay();syncRawOut();adjSelected=ST.timingIndex-1;renderAdjPanel();
+  btnUndo.disabled=false;
+  flyLineToRight(currentLine, ts);
+  scrollLyricsToCurrentLine();
+  syncRawOut();adjSelected=ST.timingIndex-1;renderAdjPanel();
   setStatus(`${ts} — ${ST.timingIndex}行目`,'ok');
 }
 btnUndo.addEventListener('click',undo);
 function undo(){
   if(!ST.undoStack.length){showToast('⚠ 戻せる操作がありません');return;}
-  ST.undoStack.pop();ST.lrcLines.pop();ST.timingIndex--;
-  if(!ST.undoStack.length)btnUndo.disabled=true;
-  updateDisplay();syncRawOut();adjSelected=ST.timingIndex;renderAdjPanel();
-  setStatus(`↩ ${ST.timingIndex+1}行目を取り消し`,'warn');
+  flyLastRowToLeft(() => {
+    ST.undoStack.pop();ST.lrcLines.pop();ST.timingIndex--;
+    if(!ST.undoStack.length)btnUndo.disabled=true;
+    updateDisplay();syncRawOut();adjSelected=ST.timingIndex;renderAdjPanel();
+    scrollLyricsToCurrentLine();
+  });
+  setStatus(`↩ ${ST.timingIndex}行目を取り消し`,'warn');
 }
 
 // ─────────────────────────────────────────────────────
 //  LYRICS INPUT
 // ─────────────────────────────────────────────────────
-lyricsIn.addEventListener('input',onLyricsChange);
+lyricsIn.addEventListener('input', onLyricsChange);
+lyricsIn.addEventListener('paste', e => {
+  // 貼り付けテキストにタイムスタンプが含まれていたらLRCとして自動インポート
+  setTimeout(() => {
+    const text = lyricsIn.value;
+    if (/\[\d+:\d+\.\d+\]/.test(text)) {
+      importLRCText(text);
+      showToast('📄 LRC テキストを検出してインポートしました');
+    }
+  }, 0);
+});
 function onLyricsChange(){
   const prev=ST.lyricsArray.slice();refreshLyricsArray();const nxt=ST.lyricsArray;
   let rf=ST.timingIndex;
@@ -894,13 +1669,19 @@ function updateDisplay(){
   else curLineDisp.textContent='タップして開始';
   nextDisp.innerHTML='';
   if(ST.rightView==='live'){
-    ST.lrcLines.forEach(l=>{const te=l.indexOf(']')+1;const row=document.createElement('div');row.className='lrc-done-row';row.style.animationDelay='0s';row.innerHTML=`<span class="lrc-ts">${l.slice(0,te)}</span><span class="lrc-txt">${esc(l.slice(te))}</span>`;nextDisp.appendChild(row);});
+    ST.lrcLines.forEach(l=>{const te=l.indexOf(']')+1;const row=document.createElement('div');row.className='lrc-done-row';row.innerHTML=`<span class="lrc-ts">${l.slice(0,te)}</span><span class="lrc-txt">${esc(l.slice(te))}</span>`;nextDisp.appendChild(row);});
     const us=idx+1;ST.lyricsArray.slice(us,us+5).forEach((line,i)=>{const row=document.createElement('div');row.className='next-line-row';row.innerHTML=`<span class="nl-num">${us+i+1}</span>${esc(line)}`;nextDisp.appendChild(row);});
     nextDisp.scrollTop=nextDisp.scrollHeight;
   }
 }
 function getLRCHeader(){const t=(inTitle.value||'Untitled').replace(/[\r\n]/g,'');const a=(inArtist.value||'Unknown Artist').replace(/[\r\n]/g,'');return`[ti:${t}]\n[ar:${a}]\n[al:Generated by LRC Studio]\n`;}
-function syncRawOut(){lrcRawOut.value=getLRCHeader()+ST.lrcLines.join('\n')+(ST.lrcLines.length?'\n':'');lrcRawOut.scrollTop=lrcRawOut.scrollHeight;}
+function syncRawOut(){
+  lrcRawOut.value=getLRCHeader()+ST.lrcLines.join('\n')+(ST.lrcLines.length?'\n':'');
+  lrcRawOut.scrollTop=lrcRawOut.scrollHeight;
+  // LRCがあり、R2接続済みならアップロードボタンを表示
+  const btn = document.getElementById('btn-upload-lrc');
+  if (btn) btn.style.display = (ST.lrcLines.length && R2_WORKER && !R2_WORKER.includes('YOUR_WORKER')) ? '' : 'none';
+}
 function toggleRightView(){
   const btn=document.getElementById('btn-toggle-view');
   if(ST.rightView==='live'){ST.rightView='raw';livePane.style.display='none';lrcRawWrap.classList.add('on');btn.textContent='タイミング表示';document.getElementById('rpane-label').textContent='LRC テキスト';syncRawOut();}
